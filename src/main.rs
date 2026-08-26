@@ -1,6 +1,7 @@
 use std::io;
 use std::process::Command;
 mod guess;
+mod csv_sort;
 fn main() {
     println!("welcome to the combied program");
     println!("use --help for all commands");
@@ -15,6 +16,7 @@ fn main() {
             println!("exit to exit program");
             println!("p-manager is a simple password manager ");
             println!("guess is a simple guess the number game");
+            println!("csv-sort is a simple csv sorting program in case for some reason you have a bunch of ranom numbers in a csv file and you want to sort them");
             continue;
         } else if input == "p-manager" {
             Command::new("python3")
@@ -24,10 +26,13 @@ fn main() {
             break;
         } else if input == "guess" {
             guess::guess();
+        } else if input == "csv-sort" {
+            csv_sort::sort_csv();
         } else if input == "exit" {
             std::process::exit(0);
         } else {
             println!("please input proper program use --help to list all them");
+            continue;
         }
         println!("would you like to run something else");
         loop {
