@@ -19,7 +19,7 @@ pub fn guess() {
         let guess: u8 = match guess.trim().parse() {
             Ok(num) => num,
             Err(_) => {
-                println!("please type a valid number");
+                println!("please type a valid u8 number");
                 continue;
             }
         };
