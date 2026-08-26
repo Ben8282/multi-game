@@ -23,7 +23,7 @@ pub fn guess() {
                 continue;
             }
         };
-        println!("you guessed:{}", guess);
+        println!("you guessed:{}", guess);w
 
         match guess.cmp(&secret_num) {
             Ordering::Less => println!("Too small"),
