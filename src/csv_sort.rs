@@ -19,13 +19,19 @@ pub fn sort_csv() {
         }
     };
     if choice == "1" {
-        println!("please enter the csv file path");
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        let file_path = input.trim().to_string();
-        let file = File::open(&file_path).unwrap();
+        let (file, file_path) = loop {
+            println!("please enter the csv file path");
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).unwrap();
+            let file_path = input.trim().to_string();
+            match File::open(&file_path) {
+                Ok(file) => break (file, file_path),
+                Err(e) => println!("could not open '{file_path}': {e}, please try again"),
+            }
+        };
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
+            .flexible(true) // rows with differing field counts are not an error
             //.delimiter(b',') optional, default is b','
             .from_reader(file);
         let mut records: Vec<BigDecimal> = Vec::new();
@@ -91,13 +97,19 @@ pub fn sort_csv() {
             }
         }
     } else if choice == "2" {
-        println!("please enter the csv file path");
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        let file_path = input.trim().to_string();
-        let file = File::open(&file_path).unwrap();
+        let (file, file_path) = loop {
+            println!("please enter the csv file path");
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).unwrap();
+            let file_path = input.trim().to_string();
+            match File::open(&file_path) {
+                Ok(file) => break (file, file_path),
+                Err(e) => println!("could not open '{file_path}': {e}, please try again"),
+            }
+        };
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
+            .flexible(true) // rows with differing field counts are not an error
             //.delimiter(b',') optional, default is b','
             .from_reader(file);
         let mut records: Vec<BigDecimal> = Vec::new();
