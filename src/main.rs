@@ -2,6 +2,7 @@ use std::io;
 use std::process::Command;
 mod guess;
 mod csv_sort;
+mod unit_convert;
 fn main() {
     println!("welcome to the combied program");
     println!("use --help for all commands");
@@ -16,6 +17,7 @@ fn main() {
             println!("exit to exit program");
             println!("p-manager is a simple password manager ");
             println!("guess is a simple guess the number game");
+            println!("unit-convert is a simple unit Converter");
             println!("csv-sort is a simple csv sorting program in case for some reason you have a bunch of ranom numbers in a csv file and you want to sort them");
             continue;
         } else if input == "p-manager" {
@@ -30,6 +32,8 @@ fn main() {
             csv_sort::sort_csv();
         } else if input == "exit" {
             std::process::exit(0);
+        } else if input == "unit-convert" {
+            unit_convert::unitconvert()
         } else {
             println!("please input proper program use --help to list all them");
             continue;
