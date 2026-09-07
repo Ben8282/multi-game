@@ -4,7 +4,7 @@
 
 Third-party software distributed as part of **multi-game**.
 
-**27 third-party package(s)** — [Rust (crates.io)](#rust-cratesio) 27.
+**28 third-party package(s)** — [Rust (crates.io)](#rust-cratesio) 28.
 
 ## Rust (crates.io)
 
@@ -14,6 +14,7 @@ Third-party software distributed as part of **multi-game**.
 | [The Unlicense](#the-unlicense) | `Unlicense` | 3 |
 | [Apache License 2.0](#apache-license-20) | `Apache-2.0` | 1 |
 | [Boost Software License 1.0](#boost-software-license-10) | `BSL-1.0` | 1 |
+| [BSD 2-Clause "Simplified" License](#bsd-2-clause-simplified-license) | `BSD-2-Clause` | 1 |
 | [Unicode License v3](#unicode-license-v3) | `Unicode-3.0` | 1 |
 
 26 package(s) offered under a choice of licenses are counted under the license elected for this distribution; 1 package(s) whose terms require more than one license are counted under each.
@@ -766,6 +767,48 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
+### BSD 2-Clause "Simplified" License
+
+SPDX: `BSD-2-Clause` · 1 package(s)
+
+Permissive. Binary redistributions must reproduce each package's copyright notice, the list of conditions and the disclaimer in the documentation or other materials provided with the distribution; both the notices and the license text are reproduced below. The BSD 2-Clause "Simplified" License also forbids using the names of the copyright holders or contributors to endorse or promote derived products without permission.
+
+**Packages**
+
+| Package | Version | Copyright | Source |
+|---|---|---|---|
+| roots | 0.0.8 | Copyright (c) 2015, Mikhail Vorotilov | [source](https://github.com/vorot/roots) |
+
+**License text**
+
+**As shipped with roots 0.0.8.** File: LICENSE.
+
+```text
+Copyright (c) 2015, Mikhail Vorotilov
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 ### Unicode License v3
 
 SPDX: `Unicode-3.0` · 1 package(s)
@@ -828,5 +871,5 @@ authorization of the copyright holder.
 
 *Resolution notes:*
 
-- multi-game: dependency tree from `cargo metadata` (27 crates; 1 dev/build-only crates excluded)
+- multi-game: dependency tree from `cargo metadata` (28 crates; 1 dev/build-only crates excluded)
 
