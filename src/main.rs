@@ -18,6 +18,7 @@ fn main() {
             println!("exit to exit program");
             println!("p-manager is a simple password manager ");
             println!("quadratic is a simple quadratic equation solver");
+            println!("prime is a simple prime number checker");
             println!("guess is a simple guess the number game");
             println!("unit-convert is a simple unit Converter");
             println!("csv-sort is a simple csv sorting program in case for some reason you have a bunch of ranom numbers in a csv file and you want to sort them");
@@ -38,6 +39,11 @@ fn main() {
             unit_convert::unitconvert()
         } else if input == "quadratic" {
             quadratic::solve_quadratic();
+        } else if input == "prime" {
+            Command::new("python3")
+                .arg("src/prime.py")
+                .status()
+                .expect("there was a problem running the prime number checker python program");
         } else {
             println!("please input proper program use --help to list all them");
             continue;
