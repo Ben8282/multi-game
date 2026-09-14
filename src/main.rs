@@ -16,12 +16,13 @@ fn main() {
         if input == "--help" {
             //add a big list of all the commands
             println!("exit to exit program");
-            println!("p-manager is a simple password manager ");
+            println!("walk-in-the-park is a simple text-based adventure game");
+            println!("p-manager is a simple password manager that stores your passwords in a plain text file encrpyption is not implemented yet");
             println!("quadratic is a simple quadratic equation solver");
             println!("prime is a simple prime number checker");
             println!("guess is a simple guess the number game");
             println!("unit-convert is a simple unit Converter");
-            println!("csv-sort is a simple csv sorting program in case for some reason you have a bunch of ranom numbers in a csv file and you want to sort them");
+            println!("csv-sort is a simple csv sorting program in case for some reason you have a bunch of random numbers in a csv file and you want to sort them");
             continue;
         } else if input == "p-manager" {
             Command::new("python3")
@@ -44,6 +45,11 @@ fn main() {
                 .arg("src/prime.py")
                 .status()
                 .expect("there was a problem running the prime number checker python program");
+        } else if input == "walk-in-the-park" {
+            Command::new("java")
+                .arg("WalkInThePark")
+                .status()
+                .expect("there was a problem running the walk in the park game");
         } else {
             println!("please input proper program use --help to list all them");
             continue;
