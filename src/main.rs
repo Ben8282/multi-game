@@ -16,6 +16,7 @@ fn main() {
         if input == "--help" {
             //add a big list of all the commands
             println!("exit to exit program");
+            println!("pong is new version of pong use arow keys and ws to play");
             println!("walk-in-the-park is a simple text-based adventure game");
             println!("p-manager is a simple password manager that stores your passwords in a plain text file encrpyption is not implemented yet");
             println!("quadratic is a simple quadratic equation solver");
@@ -50,8 +51,16 @@ fn main() {
                 .arg("WalkInThePark")
                 .status()
                 .expect("there was a problem running the walk in the park game");
+        } else if input == "pong"
+        {
+            Command::new("python3")
+                .arg("src/pong.py")
+                .status()
+                .expect("there was a problem running the pong python program");
+            break;
         } else {
-            println!("please input proper program use --help to list all them");
+            println!("invalid command");
+            println!("use --help for all commands");
             continue;
         }
         println!("would you like to run something else");

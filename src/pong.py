@@ -14,7 +14,7 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont("comic sans", 40)
                     
 screen = pygame.display.set_mode((WIDTH, HEIGHT), 0, 32)
-pygame.display.set_caption("stuipid waste of my time Pong")
+pygame.display.set_caption("Pong")
 
 back = pygame.Surface((WIDTH, HEIGHT))
 background = back.convert()
