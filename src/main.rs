@@ -15,49 +15,55 @@ fn main() {
         let input = input.trim();
         if input == "--help" {
             //add a big list of all the commands
+            println!("type the name or number of the program you want to run");
             println!("exit to exit program");
-            println!("pong is new version of pong use arow keys and ws to play");
-            println!("walk-in-the-park is a simple text-based adventure game");
-            println!("p-manager is a simple password manager that stores your passwords in a plain text file encrpyption is not implemented yet");
-            println!("quadratic is a simple quadratic equation solver");
-            println!("prime is a simple prime number checker");
-            println!("guess is a simple guess the number game");
-            println!("unit-convert is a simple unit Converter");
-            println!("csv-sort is a simple csv sorting program in case for some reason you have a bunch of random numbers in a csv file and you want to sort them");
+            println!(" 1. pong is new version of pong use arow keys and ws to play");
+            println!(" 2. next_prime is a simple next prime number checker");
+            println!(" 3. walk-in-the-park is a simple text-based adventure game");
+            println!(" 4. p-manager is a simple password manager that stores your passwords in a plain text file encrpyption is not implemented yet");
+            println!(" 5. quadratic is a simple quadratic equation solver");
+            println!(" 6. prime is a simple prime number checker");
+            println!(" 7. guess is a simple guess the number game");
+            println!(" 8. unit-convert is a simple unit Converter");
+            println!(" 9. csv-sort is a simple csv sorting program in case for some reason you have a bunch of random numbers in a csv file and you want to sort them");
             continue;
-        } else if input == "p-manager" {
+        } else if input.to_lowercase() == "p-manager" || input == "4" {
             Command::new("python3")
                 .arg("src/p-manger.py")
                 .status()
                 .expect("there was a problem running the password manger python program");
-            break;
-        } else if input == "guess" {
+        } else if input.to_lowercase() == "guess" || input == "7" {
             guess::guess();
-        } else if input == "csv-sort" {
+        } 
+        else if input.to_lowercase() == "csv-sort" || input == "9" {
             csv_sort::sort_csv();
-        } else if input == "exit" {
+        } else if input.to_lowercase() == "exit" {
             std::process::exit(0);
-        } else if input == "unit-convert" {
+        } else if input.to_lowercase() == "unit-convert" || input == "8" {
             unit_convert::unitconvert()
-        } else if input == "quadratic" {
+        } else if input.to_lowercase() == "quadratic" || input == "5" {
             quadratic::solve_quadratic();
-        } else if input == "prime" {
+        } else if input.to_lowercase() == "prime" || input == "6" {
             Command::new("python3")
                 .arg("src/prime.py")
                 .status()
                 .expect("there was a problem running the prime number checker python program");
-        } else if input == "walk-in-the-park" {
+        } else if input.to_lowercase() == "walk-in-the-park" || input == "3" {
             Command::new("java")
                 .arg("WalkInThePark")
                 .status()
                 .expect("there was a problem running the walk in the park game");
-        } else if input == "pong"
-        {
+        } else if input.to_lowercase() == "pong" || input == "1" {
             Command::new("python3")
                 .arg("src/pong.py")
                 .status()
                 .expect("there was a problem running the pong python program");
             break;
+        } else if input.to_lowercase() == "next_prime" || input == "2" {
+            Command::new("python3")
+                .arg("src/next_prime.py")
+                .status()
+                .expect("there was a problem running the next prime number checker python program");
         } else {
             println!("invalid command");
             println!("use --help for all commands");
