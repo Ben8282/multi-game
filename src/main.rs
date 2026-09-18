@@ -61,7 +61,7 @@ fn main() {
             break;
         } else if input.to_lowercase() == "next_prime" || input == "2" {
             Command::new("python3")
-                .arg("src/next_prime.py")
+                .arg("src/nextprimemain.py")
                 .status()
                 .expect("there was a problem running the next prime number checker python program");
         } else {
