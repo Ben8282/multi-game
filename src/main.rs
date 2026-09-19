@@ -50,6 +50,8 @@ fn main() {
                 .expect("there was a problem running the prime number checker python program");
         } else if input.to_lowercase() == "walk-in-the-park" || input == "3" {
             Command::new("java")
+                .arg("-cp")
+                .arg("src/")
                 .arg("WalkInThePark")
                 .status()
                 .expect("there was a problem running the walk in the park game");
