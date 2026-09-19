@@ -225,10 +225,14 @@ jobs:
 
           if [ -x runtime/python/bin/python3 ]; then
             PY=runtime/python/bin/python3
+            PYDIR=runtime/python/bin
           else
             PY=runtime/python/python.exe
+            PYDIR=runtime/python
+            cp runtime/python/python.exe runtime/python/python3.exe
           fi
           echo "PY=$PY" >> "$GITHUB_ENV"
+          echo "PYDIR=$PYDIR" >> "$GITHUB_ENV"
 
           if [ -f requirements.txt ]; then
             uv pip install --python "$PY" --break-system-packages -r requirements.txt
@@ -266,27 +270,69 @@ jobs:
           for doc in README.md LICENSE THIRD_PARTY_LICENSES.md requirements.txt; do
             if [ -f "$doc" ]; then cp "$doc" "$BUNDLE/"; fi
           done
-          cat > "$BUNDLE/HOW-TO-RUN.txt" <<EOF
-          Nothing to install. Open a terminal in THIS folder and run:
 
-            ./$EXE
-
-          Python, pygame and Java are all included in runtime/ and are used
-          automatically. Start it from this folder so it can find src/ and
-          the .class files next to it.
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            printf '%s\r\n' \
+              '@echo off' \
+              'cd /d "%~dp0"' \
+              'set "PATH=%~dp0runtime\python;%~dp0runtime\jvm\bin;%PATH%"' \
+              "$EXE %*" > "$BUNDLE/run.bat"
+            LAUNCH='run.bat'
+          else
+            cat > "$BUNDLE/run.sh" <<EOF
+          #!/bin/sh
+          HERE="\$(cd "\$(dirname "\$0")" && pwd)"
+          PATH="\$HERE/runtime/python/bin:\$HERE/runtime/jvm/bin:\$PATH"
+          export PATH
+          cd "\$HERE" || exit 1
+          exec "./$EXE" "\$@"
           EOF
+            chmod +x "$BUNDLE/run.sh"
+            LAUNCH='./run.sh'
+          fi
+
+          cat > "$BUNDLE/HOW-TO-RUN.txt" <<EOF
+          Nothing to install.
+
+          Open a terminal in THIS folder and run:
+
+            $LAUNCH
+
+          Python, pygame and Java are all included in the runtime folder.
+          The launcher script points the program at them, so you do not
+          need any of them installed on your machine.
+          EOF
+
           echo "BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
           du -sh "$BUNDLE"
 
       - name: Run the bundled launcher end to end
+        if: runner.os != 'Windows'
         run: |
           set -e
           cd "$BUNDLE"
           echo "--- menu loads ---"
+          printf -- '--help\nexit\n' | ./run.sh
+          echo "--- a Python program runs through the BUNDLED interpreter ---"
+          printf -- '6\n7\nn\n' | ./run.sh
+
+      - name: Run the bundled launcher end to end
+        if: runner.os == 'Windows'
+        run: |
+          set -e
+          cd "$BUNDLE"
+          test -f run.bat
+          export PATH="$PWD/runtime/python:$PWD/runtime/jvm/bin:$PATH"
+          echo "--- menu loads ---"
           printf -- '--help\nexit\n' | "./$EXE"
-          echo "--- a Python program runs through the bundled interpreter ---"
+          echo "--- a Python program runs through the BUNDLED interpreter ---"
           printf -- '6\n7\nn\n' | "./$EXE"
-          echo "--- bundled JVM loads the compiled class ---"
+
+      - name: Prove the bundled runtimes are the ones being used
+        run: |
+          set -e
+          cd "$BUNDLE"
+          "./$PY" -c "import sys; print('bundled python:', sys.executable)"
           ./runtime/jvm/bin/java -version
 
       - uses: actions/upload-artifact@v5
@@ -331,7 +377,7 @@ jobs:
           mkdir -p "AppDir/usr/bin" "AppDir/usr/share/$PROJECT"
           install -m 755 "bundle/$BIN" "AppDir/usr/bin/$BIN"
           mv bundle/runtime "AppDir/usr/bin/runtime"
-          rm -f "bundle/$BIN"
+          rm -f "bundle/$BIN" bundle/run.sh
           cp -a bundle/. "AppDir/usr/share/$PROJECT/"
 
           cat > AppDir/AppRun <<EOF
@@ -340,6 +386,8 @@ jobs:
           DATA="\${XDG_DATA_HOME:-\$HOME/.local/share}/$PROJECT"
           mkdir -p "\$DATA" || exit 1
           cp -R "\$HERE/usr/share/$PROJECT/." "\$DATA/" || exit 1
+          PATH="\$HERE/usr/bin/runtime/python/bin:\$HERE/usr/bin/runtime/jvm/bin:\$PATH"
+          export PATH
           cd "\$DATA" || exit 1
           exec "\$HERE/usr/bin/$BIN" "\$@"
           EOF
@@ -400,7 +448,7 @@ jobs:
 
   release:
     name: release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
     needs: [java, python, build, appimage]
     runs-on: ubuntu-24.04
     permissions:
