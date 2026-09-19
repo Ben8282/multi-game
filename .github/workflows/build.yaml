@@ -1,0 +1,510 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  java:
+    name: java bytecode
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Compile WalkInThePark
+        run: javac --release 17 -d . src/Walk-in-the-Park.java
+
+      - name: Verify the class loads and is named correctly
+        run: |
+          test -f WalkInThePark.class
+          javap -cp . WalkInThePark
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: java-class
+          path: WalkInThePark.class
+          if-no-files-found: error
+
+  python:
+    name: python ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            runner: ubuntu-24.04
+          - name: windows
+            runner: windows-latest
+          - name: macos
+            runner: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Provide a python3 command on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $py = (Get-Command python).Source
+          $dir = Split-Path $py
+          if (-not (Test-Path "$dir\python3.exe")) { Copy-Item $py "$dir\python3.exe" }
+          python3 --version
+
+      - name: Install pygame
+        run: python -m pip install --disable-pip-version-check pygame
+
+      - name: Byte-compile every script
+        shell: bash
+        run: python -m py_compile src/*.py
+
+      - name: Import check
+        shell: bash
+        run: python -c "import pygame; print(pygame.version.ver, pygame.version.SDL)"
+
+      - name: Run the non-graphical scripts
+        shell: bash
+        run: |
+          set -e
+          printf '7\n'          | python3 src/prime.py
+          printf '10\n'         | python3 src/nextprimemain.py
+          printf '1\nci\npw\n2\n' | python3 src/p-manger.py
+          test -f password.txt
+          rm -f password.txt
+
+      - name: Run Pong headless
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set +e
+          timeout 10 python3 src/pong.py
+          code=$?
+          set -e
+          if [ "$code" -ne 124 ]; then
+            echo "pong exited early with code $code instead of running its loop"
+            exit 1
+          fi
+
+  build:
+    name: ${{ matrix.name }}
+    needs: java
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - name: linux-x86
+            runner: ubuntu-24.04
+            target: i686-unknown-linux-gnu
+            apt: gcc-multilib
+          - name: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - name: windows-x86
+            runner: windows-latest
+            target: i686-pc-windows-msvc
+          - name: windows-arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+          - name: macos-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - name: macos-x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install 32-bit toolchain
+        if: matrix.apt != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ matrix.apt }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Test
+        run: cargo test --release --target ${{ matrix.target }}
+
+      - uses: actions/download-artifact@v6
+        with:
+          name: java-class
+
+      - name: Smoke test the launcher
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          chmod +x target/${{ matrix.target }}/release/multi-game
+          printf -- '--help\nexit\n' | target/${{ matrix.target }}/release/multi-game
+
+      - name: Smoke test the launcher
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = "target\${{ matrix.target }}\release\multi-game.exe"
+          @('--help', 'exit') | & $exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Assemble bundle
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -e
+          BUNDLE="dist/multi-game-${{ matrix.name }}"
+          mkdir -p "$BUNDLE/src"
+          cp target/${{ matrix.target }}/release/multi-game "$BUNDLE/"
+          chmod +x "$BUNDLE/multi-game"
+          cp WalkInThePark.class "$BUNDLE/"
+          cp src/*.py "$BUNDLE/src/"
+          cp README.md LICENSE THIRD_PARTY_LICENSES.md "$BUNDLE/"
+          cat > "$BUNDLE/HOW-TO-RUN.txt" <<'EOF'
+          Open a terminal in THIS folder and run ./multi-game
+
+          It has to be started from this folder. The launcher looks for
+          src/*.py and WalkInThePark.class relative to where you started it.
+
+          You also need these installed on your machine:
+            python3   for pong, prime, next_prime and p-manager
+            pygame    for pong
+            java      for walk-in-the-park (Java 17 or newer)
+
+          The Rust programs (guess, quadratic, unit-convert, csv-sort) need nothing extra.
+          EOF
+
+      - name: Assemble bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundle = "dist\multi-game-${{ matrix.name }}"
+          New-Item -ItemType Directory -Force -Path "$bundle\src" | Out-Null
+          Copy-Item "target\${{ matrix.target }}\release\multi-game.exe" $bundle
+          Copy-Item WalkInThePark.class $bundle
+          Copy-Item src\*.py "$bundle\src"
+          Copy-Item README.md, LICENSE, THIRD_PARTY_LICENSES.md $bundle
+          @'
+          Open PowerShell in THIS folder and run .\multi-game.exe
+
+          It has to be started from this folder. The launcher looks for
+          src\*.py and WalkInThePark.class relative to where you started it.
+
+          You also need these installed on your machine:
+            python3   for pong, prime, next_prime and p-manager
+            pygame    for pong
+            java      for walk-in-the-park (Java 17 or newer)
+
+          Windows does not provide a python3 command by default. See the
+          Windows section of README.md for the one-line fix.
+
+          The Rust programs (guess, quadratic, unit-convert, csv-sort) need nothing extra.
+          '@ | Set-Content "$bundle\HOW-TO-RUN.txt"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: multi-game-${{ matrix.name }}
+          path: dist/multi-game-${{ matrix.name }}
+          if-no-files-found: error
+
+  musl:
+    name: linux-x86_64-musl
+    needs: java
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v6
+        with:
+          name: java-class
+
+      - name: Build and test inside Alpine
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work alpine:3.22 sh -eu -c '
+            apk add --no-cache build-base rust cargo python3 py3-pygame openjdk21-jdk
+            cargo build --release
+            printf -- "--help\nexit\n" | ./target/release/multi-game
+            printf "7\n"  | python3 src/prime.py
+            printf "10\n" | python3 src/nextprimemain.py
+            python3 -c "import pygame; print(pygame.version.ver)"
+            java -version
+            javap -cp . WalkInThePark
+            file ./target/release/multi-game
+          '
+
+      - name: Assemble bundle
+        run: |
+          set -e
+          BUNDLE="dist/multi-game-linux-x86_64-musl"
+          mkdir -p "$BUNDLE/src"
+          sudo cp target/release/multi-game "$BUNDLE/"
+          sudo chown "$(id -u):$(id -g)" "$BUNDLE/multi-game"
+          chmod +x "$BUNDLE/multi-game"
+          cp WalkInThePark.class "$BUNDLE/"
+          cp src/*.py "$BUNDLE/src/"
+          cp README.md LICENSE THIRD_PARTY_LICENSES.md "$BUNDLE/"
+          cat > "$BUNDLE/HOW-TO-RUN.txt" <<'EOF'
+          Statically-relevant note: this build is linked against musl libc,
+          for Alpine and other musl systems. On glibc systems use the
+          multi-game-linux-x86_64 build instead.
+
+          Open a terminal in THIS folder and run ./multi-game
+
+          Install python3, py3-pygame and openjdk21-jdk with apk for the
+          Python and Java programs.
+          EOF
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: multi-game-linux-x86_64-musl
+          path: dist/multi-game-linux-x86_64-musl
+          if-no-files-found: error
+
+  appimage:
+    name: appimage-${{ matrix.arch }}
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            bundle: linux-x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            bundle: linux-arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/download-artifact@v6
+        with:
+          name: multi-game-${{ matrix.bundle }}
+          path: bundle
+
+      - name: Install appimagetool prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils
+
+      - name: Build a minimal Java runtime
+        run: |
+          jlink --add-modules java.base \
+                --strip-debug --no-header-files --no-man-pages \
+                --output jre
+          ./jre/bin/java -version
+
+      - name: Assemble the AppDir
+        run: |
+          set -e
+          mkdir -p AppDir/usr/bin AppDir/usr/share/multi-game/src AppDir/usr/lib
+          install -m 755 bundle/multi-game AppDir/usr/bin/multi-game
+          cp bundle/WalkInThePark.class AppDir/usr/share/multi-game/
+          cp bundle/src/*.py AppDir/usr/share/multi-game/src/
+          cp README.md LICENSE THIRD_PARTY_LICENSES.md AppDir/usr/share/multi-game/
+          cp -r jre AppDir/usr/lib/jvm
+
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          DATA="${XDG_DATA_HOME:-$HOME/.local/share}/multi-game"
+          mkdir -p "$DATA" || exit 1
+          cp -R "$HERE/usr/share/multi-game/." "$DATA/" || exit 1
+          export PATH="$HERE/usr/lib/jvm/bin:$PATH"
+          cd "$DATA" || exit 1
+          exec "$HERE/usr/bin/multi-game" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          cat > AppDir/multi-game.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Multi-Game
+          Comment=A menu of small Rust, Python and Java programs
+          Exec=multi-game
+          Icon=multi-game
+          Categories=Game;
+          Terminal=true
+          EOF
+
+          python3 - <<'EOF'
+          import struct, zlib
+          w = h = 256
+          raw = b"".join(b"\x00" + bytes([30, 34, 40]) * w for _ in range(h))
+          def chunk(tag, data):
+              body = tag + data
+              return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+          png = (b"\x89PNG\r\n\x1a\n"
+                 + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                 + chunk(b"IDAT", zlib.compress(raw))
+                 + chunk(b"IEND", b""))
+          open("AppDir/multi-game.png", "wb").write(png)
+          EOF
+
+      - name: Build the AppImage
+        env:
+          ARCH: ${{ matrix.arch }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          set -e
+          curl -fsSL -o appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-${{ matrix.arch }}.AppImage"
+          chmod +x appimagetool
+          ./appimagetool -n AppDir "multi-game-${{ matrix.bundle }}.AppImage"
+
+      - name: Smoke test the AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: printf -- '--help\nexit\n' | "./multi-game-${{ matrix.bundle }}.AppImage"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: multi-game-${{ matrix.bundle }}-appimage
+          path: multi-game-${{ matrix.bundle }}.AppImage
+          if-no-files-found: error
+
+  distro-packages:
+    name: packages on ${{ matrix.distro }}
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: fedora
+            image: fedora:latest
+            install: dnf install -y git gcc python3 python3-pygame java-devel
+          - distro: arch
+            image: archlinux:latest
+            install: pacman -Syu --noconfirm --needed git base-devel python python-pygame jdk-openjdk
+          - distro: almalinux
+            image: almalinux:9
+            install: >-
+              dnf install -y dnf-plugins-core &&
+              dnf config-manager --set-enabled crb &&
+              dnf install -y epel-release &&
+              dnf install -y git gcc python3 python3-pygame java-devel
+          - distro: opensuse
+            image: opensuse/tumbleweed
+            install: zypper --non-interactive install git gcc python3 python3-pip java-21-openjdk-devel
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the packages the README tells people to install
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work ${{ matrix.image }} sh -eu -c '
+            ${{ matrix.install }}
+            javac --release 17 -d . src/Walk-in-the-Park.java
+            javap -cp . WalkInThePark
+            printf "7\n"  | python3 src/prime.py
+            printf "10\n" | python3 src/nextprimemain.py
+            python3 -c "import pygame" || echo "no pygame package on this distro (expected on openSUSE)"
+          '
+
+  nix:
+    name: nix-shell
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build inside nix-shell
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work nixos/nix:latest sh -eu -c '
+            nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
+            nix-channel --update
+            nix-shell -p rustc cargo python3 python3Packages.pygame jdk --run "
+              cargo build --release
+              printf -- \"--help\nexit\n\" | ./target/release/multi-game
+              javac --release 17 -d . src/Walk-in-the-Park.java
+              javap -cp . WalkInThePark
+              python3 -c \"import pygame\"
+            "
+          '
+
+  release:
+    name: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [java, python, build, musl, appimage]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          path: artifacts
+
+      - name: Package the bundles
+        run: |
+          set -e
+          mkdir -p dist
+          cd artifacts
+          for dir in */; do
+            name="${dir%/}"
+            case "$name" in
+              java-class)
+                continue
+                ;;
+              *-appimage)
+                base="${name%-appimage}"
+                mv "$name"/*.AppImage "../dist/$base.AppImage"
+                chmod +x "../dist/$base.AppImage"
+                ;;
+              multi-game-windows-*)
+                (cd "$name" && zip -qr "../../dist/$name.zip" .)
+                ;;
+              multi-game-*)
+                chmod +x "$name/multi-game"
+                tar -czf "../dist/$name.tar.gz" -C "$name" .
+                ;;
+            esac
+          done
+          ls -lh ../dist
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -e
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber dist/*
