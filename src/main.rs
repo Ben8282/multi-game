@@ -7,6 +7,16 @@ mod quadratic;
 fn main() {
     println!("welcome to the combied program");
     println!("use --help for all commands");
+    let mut python = "";
+    if Command::new("python3").arg("--version").output().is_ok(){
+        python = "python3";
+    } else if Command::new("python").arg("--version").output().is_ok(){
+        python = "python";
+    } else {
+        println!("python is not installed on your system");
+        println!("please install python to use this program");
+        std::process::exit(1);
+    }
     loop {
         let mut input = String::new();
         io::stdin()
@@ -28,8 +38,8 @@ fn main() {
             println!(" 9. csv-sort is a simple csv sorting program in case for some reason you have a bunch of random numbers in a csv file and you want to sort them");
             continue;
         } else if input.to_lowercase() == "p-manager" || input == "4" {
-            Command::new("python3")
-                .arg("src/p-manger.py")
+            Command::new(python)
+                .arg("src/p-manager.py")
                 .status()
                 .expect("there was a problem running the password manger python program");
         } else if input.to_lowercase() == "guess" || input == "7" {
@@ -44,25 +54,23 @@ fn main() {
         } else if input.to_lowercase() == "quadratic" || input == "5" {
             quadratic::solve_quadratic();
         } else if input.to_lowercase() == "prime" || input == "6" {
-            Command::new("python3")
+            Command::new(python)
                 .arg("src/prime.py")
                 .status()
                 .expect("there was a problem running the prime number checker python program");
         } else if input.to_lowercase() == "walk-in-the-park" || input == "3" {
             Command::new("java")
-                .arg("-cp")
-                .arg("src/")
-                .arg("WalkInThePark")
+                .arg("src/Walk-in-the-Park.java")
                 .status()
                 .expect("there was a problem running the walk in the park game");
         } else if input.to_lowercase() == "pong" || input == "1" {
-            Command::new("python3")
+            Command::new(python)
                 .arg("src/pong.py")
                 .status()
                 .expect("there was a problem running the pong python program");
             break;
         } else if input.to_lowercase() == "next_prime" || input == "2" {
-            Command::new("python3")
+            Command::new(python)
                 .arg("src/nextprimemain.py")
                 .status()
                 .expect("there was a problem running the next prime number checker python program");
