@@ -21,11 +21,12 @@ env:
   JDK_VERSION: "21"
   JAVA_RELEASE: "17"
   JAVA_ENCODING: "UTF-8"
+  JLINK_MODULES: "java.base,jdk.compiler"
   APPIMAGETOOL_VERSION: "1.9.0"
 
 jobs:
   java:
-    name: java bytecode
+    name: java source
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -35,34 +36,24 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JDK_VERSION }}
 
-      - name: Compile every Java source in the repo
+      - name: Compile-check every Java source
         run: |
           set -e
           sources=$(find src -name '*.java')
           if [ -z "$sources" ]; then
             echo "no .java files found under src/"
-            exit 1
+            exit 0
           fi
-          echo "compiling:"; echo "$sources" | sed 's/^/  /'
-          mkdir -p build/classes
-          javac -encoding "$JAVA_ENCODING" --release "$JAVA_RELEASE" -d build/classes $sources
+          echo "checking:"; echo "$sources" | sed 's/^/  /'
+          javac -encoding "$JAVA_ENCODING" --release "$JAVA_RELEASE" -d "$RUNNER_TEMP/classes" $sources
 
-      - name: Verify every class loads
+      - name: Warn about non-ASCII characters in Java sources
         run: |
-          set -e
-          cd build/classes
-          find . -name '*.class' ! -name '*$*' -print0 | while IFS= read -r -d '' c; do
-            name=$(echo "${c#./}" | sed 's/\.class$//; s|/|.|g')
-            echo "checking $name"
-            javap -cp . "$name" > /dev/null
+          for f in $(find src -name '*.java'); do
+            if LC_ALL=C grep -q '[^[:print:][:space:]]' "$f"; then
+              echo "::warning file=$f::contains non-ASCII characters; the source launcher compiles this on the user's machine and may fail on a non-UTF-8 JDK 17"
+            fi
           done
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: java-classes
-          path: build/classes
-          if-no-files-found: error
-          retention-days: 1
 
   python:
     name: python ${{ matrix.name }}
@@ -153,7 +144,6 @@ jobs:
 
   build:
     name: ${{ matrix.name }}
-    needs: java
     runs-on: ${{ matrix.runner }}
     defaults:
       run:
@@ -201,18 +191,15 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
           cargo test --release --target ${{ matrix.target }}
 
-      - uses: actions/download-artifact@v6
-        with:
-          name: java-classes
-          path: build/classes
-
-      - name: Bundle a minimal Java runtime
+      - name: Bundle a Java runtime that can run .java files directly
         run: |
           set -e
-          jlink --add-modules java.base \
+          jlink --add-modules "$JLINK_MODULES" \
                 --strip-debug --no-header-files --no-man-pages \
                 --output runtime/jvm
           runtime/jvm/bin/java -version
+          runtime/jvm/bin/java --list-modules | grep -q '^jdk.compiler' \
+            || { echo "jdk.compiler missing, the source launcher will not work"; exit 1; }
 
       - name: Bundle a standalone Python with the project's dependencies
         run: |
@@ -225,14 +212,11 @@ jobs:
 
           if [ -x runtime/python/bin/python3 ]; then
             PY=runtime/python/bin/python3
-            PYDIR=runtime/python/bin
           else
             PY=runtime/python/python.exe
-            PYDIR=runtime/python
             cp runtime/python/python.exe runtime/python/python3.exe
           fi
           echo "PY=$PY" >> "$GITHUB_ENV"
-          echo "PYDIR=$PYDIR" >> "$GITHUB_ENV"
 
           if [ -f requirements.txt ]; then
             uv pip install --python "$PY" --break-system-packages -r requirements.txt
@@ -257,7 +241,6 @@ jobs:
           BIN=$(grep -m1 '^name' Cargo.toml | tr -d '\r' | sed -E 's/.*"(.*)".*/\1/')
           EXE="$BIN"
           if [ "${{ runner.os }}" = "Windows" ]; then EXE="$BIN.exe"; fi
-          echo "BIN=$BIN" >> "$GITHUB_ENV"
           echo "EXE=$EXE" >> "$GITHUB_ENV"
 
           BUNDLE="dist/$PROJECT-${{ matrix.name }}"
@@ -265,8 +248,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/$EXE" "$BUNDLE/$EXE"
           chmod +x "$BUNDLE/$EXE"
           cp -a runtime "$BUNDLE/runtime"
-          cp -a build/classes/. "$BUNDLE/"
-          cp src/*.py "$BUNDLE/src/"
+          find src -maxdepth 1 -type f ! -name '*.rs' -exec cp {} "$BUNDLE/src/" \;
           for doc in README.md LICENSE THIRD_PARTY_LICENSES.md requirements.txt; do
             if [ -f "$doc" ]; then cp "$doc" "$BUNDLE/"; fi
           done
@@ -298,42 +280,38 @@ jobs:
 
             $LAUNCH
 
-          Python, pygame and Java are all included in the runtime folder.
-          The launcher script points the program at them, so you do not
-          need any of them installed on your machine.
+          Python, pygame and Java are all included in the runtime folder,
+          and the launcher script points the program at them.
           EOF
 
           echo "BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
+          echo "--- bundle contents ---"
+          ls "$BUNDLE" "$BUNDLE/src"
           du -sh "$BUNDLE"
 
-      - name: Run the bundled launcher end to end
-        if: runner.os != 'Windows'
+      - name: Run the bundle end to end
         run: |
           set -e
           cd "$BUNDLE"
-          echo "--- menu loads ---"
-          printf -- '--help\nexit\n' | ./run.sh
-          echo "--- a Python program runs through the BUNDLED interpreter ---"
-          printf -- '6\n7\nn\n' | ./run.sh
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            test -f run.bat
+            export PATH="$PWD/runtime/python:$PWD/runtime/jvm/bin:$PATH"
+            LAUNCH="./$EXE"
+          else
+            LAUNCH="./run.sh"
+          fi
 
-      - name: Run the bundled launcher end to end
-        if: runner.os == 'Windows'
-        run: |
-          set -e
-          cd "$BUNDLE"
-          test -f run.bat
-          export PATH="$PWD/runtime/python:$PWD/runtime/jvm/bin:$PATH"
-          echo "--- menu loads ---"
-          printf -- '--help\nexit\n' | "./$EXE"
-          echo "--- a Python program runs through the BUNDLED interpreter ---"
-          printf -- '6\n7\nn\n' | "./$EXE"
+          echo "--- menu loads and finds the bundled Python ---"
+          printf -- '--help\nexit\n' | $LAUNCH
 
-      - name: Prove the bundled runtimes are the ones being used
-        run: |
-          set -e
-          cd "$BUNDLE"
-          "./$PY" -c "import sys; print('bundled python:', sys.executable)"
-          ./runtime/jvm/bin/java -version
+          echo "--- a Python program runs through the bundled interpreter ---"
+          printf -- '6\n7\nn\n' | $LAUNCH
+
+          echo "--- the Java game starts through the bundled JVM ---"
+          out=$(printf 'CI\n1\n' | ./runtime/jvm/bin/java src/Walk-in-the-Park.java 2>&1 || true)
+          echo "$out" | head -3
+          echo "$out" | grep -q 'Welcome' \
+            || { echo "the Java game did not start"; exit 1; }
 
       - uses: actions/upload-artifact@v5
         with:
@@ -377,6 +355,7 @@ jobs:
           mkdir -p "AppDir/usr/bin" "AppDir/usr/share/$PROJECT"
           install -m 755 "bundle/$BIN" "AppDir/usr/bin/$BIN"
           mv bundle/runtime "AppDir/usr/bin/runtime"
+          chmod -R +x AppDir/usr/bin/runtime
           rm -f "bundle/$BIN" bundle/run.sh
           cp -a bundle/. "AppDir/usr/share/$PROJECT/"
 
