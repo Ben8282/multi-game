@@ -50,11 +50,11 @@ pub fn sort_csv() {
             (3) overwrite the original file"
         );
         loop {
-        let mut input = String::new();
+            let mut input = String::new();
             io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-        let choice = input.trim();
+                .read_line(&mut input)
+                .expect("Failed to read line");
+            let choice = input.trim();
             match choice {
                 "1" => {
                     for value in &records {
@@ -66,7 +66,8 @@ pub fn sort_csv() {
                     // Implementation for writing to file
                     println!("please enter the output file path");
                     let mut output_path = String::new();
-                    io::stdin().read_line(&mut output_path)
+                    io::stdin()
+                        .read_line(&mut output_path)
                         .expect("Failed to read line");
                     let output_path = output_path.trim();
                     let mut file = File::create(output_path).unwrap();
@@ -80,7 +81,7 @@ pub fn sort_csv() {
                     println!("overwriting original file");
                     let mut file = File::create(&file_path).unwrap();
                     for value in &records {
-                    writeln!(file, "{value}").unwrap();
+                        writeln!(file, "{value}").unwrap();
                     }
                     break;
                 }
@@ -129,10 +130,10 @@ pub fn sort_csv() {
         );
         loop {
             let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-        let choice = input.trim();
+            io::stdin()
+                .read_line(&mut input)
+                .expect("Failed to read line");
+            let choice = input.trim();
             match choice {
                 "1" => {
                     for value in &records {
@@ -144,7 +145,8 @@ pub fn sort_csv() {
                     // Implementation for writing to file
                     println!("please enter the output file path");
                     let mut output_path = String::new();
-                    io::stdin().read_line(&mut output_path)
+                    io::stdin()
+                        .read_line(&mut output_path)
                         .expect("Failed to read line");
                     let output_path = output_path.trim();
                     let mut file = File::create(output_path).unwrap();
@@ -158,7 +160,7 @@ pub fn sort_csv() {
                     println!("overwriting original file");
                     let mut file = File::create(&file_path).unwrap();
                     for value in &records {
-                    writeln!(file, "{value}").unwrap();
+                        writeln!(file, "{value}").unwrap();
                     }
                     break;
                 }

@@ -1,4 +1,4 @@
-use roots::{find_roots_quadratic, Roots};
+use roots::{Roots, find_roots_quadratic};
 use std::io;
 pub fn solve_quadratic() {
     println!("hello welcome to the quadratic equation solver");
@@ -53,7 +53,10 @@ pub fn solve_quadratic() {
     }
     match find_roots_quadratic(a_math, b_math, c_math) {
         Roots::Two(roots) => {
-            println!("the solutions of the quadratic equation are: {} and {}", roots[0], roots[1]);
+            println!(
+                "the solutions of the quadratic equation are: {} and {}",
+                roots[0], roots[1]
+            );
         }
         Roots::One(roots) => {
             println!("the solution of the quadratic equation is: {}", roots[0]);
@@ -61,6 +64,6 @@ pub fn solve_quadratic() {
         Roots::No(_) => {
             println!("the quadratic equation has no real solutions");
         }
-        _ => unreachable!(), 
+        _ => unreachable!(),
     }
 }
