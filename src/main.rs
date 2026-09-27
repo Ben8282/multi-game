@@ -37,9 +37,10 @@ fn main() {
             println!(" 6. prime is a simple prime number checker");
             println!(" 7. guess is a simple guess the number game");
             println!(" 8. unit-convert is a simple unit Converter");
-            println!(
-                " 9. csv-sort is a simple csv sorting program in case for some reason you have a bunch of random numbers in a csv file and you want to sort them"
-            );
+            println!(" 9. csv-sort is a simple csv sorting program in case for some reason you have a bunch of random numbers in a csv file and you want to sort them");
+            println!(" 10. rock-paper-scissors is a simple rock paper scissors game");
+            println!(" 11. wordle is a simple wordle game but not all words are in english so you might have to guess some words");
+            println!(" 12. fake_gambling is a fake gambling game");
             continue;
         } else if input.to_lowercase() == "p-manager" || input == "4" {
             Command::new(python)
@@ -76,7 +77,24 @@ fn main() {
                 .arg("src/nextprimemain.py")
                 .status()
                 .expect("there was a problem running the next prime number checker python program");
-        } else {
+        } else if 
+        input.to_lowercase() == "rock-paper-scissors" || input == "10" {
+            Command::new(python)
+                .arg("src/rock-paper-scissors.py")
+                .status()
+                .expect("there was a problem running the rock paper scissors python program");
+        } else if input.to_lowercase() == "wordle" || input == "11" {
+            Command::new(python)
+                .arg("src/wordle.py")
+                .status()
+                .expect("there was a problem running the wordle game");
+        } else if input.to_lowercase() == "rock-paper-scissors" || input == "12" {
+            Command::new(python)
+                .arg("src/rock-paper-scissors.py")
+                .status()
+                .expect("there was a problem running the rock paper scissors game");
+        }
+        else{
             println!("invalid command");
             println!("use --help for all commands");
             continue;
