@@ -88,11 +88,11 @@ fn main() {
                 .arg("src/wordle.py")
                 .status()
                 .expect("there was a problem running the wordle game");
-        } else if input.to_lowercase() == "rock-paper-scissors" || input == "12" {
+        } else if input.to_lowercase() == "fake_gambling" || input == "12" {
             Command::new(python)
-                .arg("src/rock-paper-scissors.py")
+                .arg("src/fake_gambling.py")
                 .status()
-                .expect("there was a problem running the rock paper scissors game");
+                .expect("there was a problem running the fake_gambling game");
         }
         else{
             println!("invalid command");

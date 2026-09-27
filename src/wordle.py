@@ -43,7 +43,7 @@ def wordle():
     
     print(f"Sorry, you've run out of attempts. The secret word was '{secret_word}'.")
 
-print("when you enter an answer it will be lowercase if it is correct but in the wrong spot, if it is correct it will be uppercase")
+print("when you enter an answer it will be lowercase if it is correct but in the wrong spot, if it is correct in the right spot it will be uppercase")
 
 name = input("Enter your name: ")
 
