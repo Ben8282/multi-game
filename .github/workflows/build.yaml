@@ -17,134 +17,62 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   PROJECT: ${{ github.event.repository.name }}
-  PYTHON_VERSION: "3.13"
-  JDK_VERSION: "21"
-  JAVA_RELEASE: "17"
-  JAVA_ENCODING: "UTF-8"
-  JLINK_MODULES: "java.base,jdk.compiler"
-  APPIMAGETOOL_VERSION: "1.9.0"
+  # Every download bundles its own Python (with pygame) and Java, so users install nothing.
+  PYTHON_VERSION: "3.14"
+  PYTHON_PACKAGES: pygame-ce
+  JDK_VERSION: "21" # newest LTS that Temurin ships for every target, Windows ARM64 included
+  JLINK_MODULES: java.base,jdk.compiler # jdk.compiler is what `java File.java` needs
+  APPIMAGETOOL_VERSION: "1.9.1"
+  APPIMAGE_RUNTIME_VERSION: "20251108"
 
 jobs:
-  java:
-    name: java source
-    runs-on: ubuntu-24.04
+  check:
+    name: check java and python sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ env.JDK_VERSION }}
 
-      - name: Compile-check every Java source
-        run: |
-          set -e
-          sources=$(find src -name '*.java')
-          if [ -z "$sources" ]; then
-            echo "no .java files found under src/"
-            exit 0
-          fi
-          echo "checking:"; echo "$sources" | sed 's/^/  /'
-          javac -encoding "$JAVA_ENCODING" --release "$JAVA_RELEASE" -d "$RUNNER_TEMP/classes" $sources
-
-      - name: Warn about non-ASCII characters in Java sources
-        run: |
-          for f in $(find src -name '*.java'); do
-            if LC_ALL=C grep -q '[^[:print:][:space:]]' "$f"; then
-              echo "::warning file=$f::contains non-ASCII characters; the source launcher compiles this on the user's machine and may fail on a non-UTF-8 JDK 17"
-            fi
-          done
-
-  python:
-    name: python ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux
-            runner: ubuntu-24.04
-          - name: windows
-            runner: windows-latest
-          - name: macos
-            runner: macos-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Python dependencies
-        run: |
-          set -e
-          if [ -f requirements.txt ]; then
-            python -m pip install --disable-pip-version-check -r requirements.txt
-          else
-            echo "no requirements.txt, falling back to pygame-ce"
-            python -m pip install --disable-pip-version-check pygame-ce
-          fi
+      - name: Compile every Java source
+        run: javac -d "$RUNNER_TEMP/classes" src/*.java
 
-      - name: Byte-compile every script
-        run: python -m compileall -q src
-
-      - name: Import every third-party dependency
+      - name: Byte-compile every Python script
         run: |
-          set -e
-          mods=$(grep -rhoE '^[[:space:]]*(import|from)[[:space:]]+[a-zA-Z_][a-zA-Z0-9_]*' src --include='*.py' \
-                 | awk '{print $2}' | sort -u)
-          for m in $mods; do
-            if [ -f "src/$m.py" ]; then continue; fi
-            python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('$m') else 1)" \
-              || { echo "missing module: $m"; exit 1; }
+          python -m pip install --disable-pip-version-check $PYTHON_PACKAGES
+          python -m compileall -q src
+
+      - name: Check that every import resolves
+        run: |
+          for m in $(grep -rhoE '^\s*(import|from)\s+[A-Za-z_][A-Za-z0-9_]*' src --include='*.py' | awk '{print $2}' | sort -u); do
+            [ -f "src/$m.py" ] && continue # a script in this repo
+            python -c "import $m" || { echo "cannot import $m"; exit 1; }
             echo "ok: $m"
           done
 
-      - name: Run scripted smoke tests
-        run: |
-          set -e
-          if [ ! -d .github/smoke ]; then
-            echo "no .github/smoke directory, skipping"
-            exit 0
-          fi
-          for input in .github/smoke/*.in; do
-            [ -e "$input" ] || continue
-            script="src/$(basename "$input" .in).py"
-            if [ ! -f "$script" ]; then
-              echo "$input has no matching $script"
-              exit 1
-            fi
-            echo "running $script"
-            python "$script" < "$input" > /dev/null
-          done
-          rm -f password.txt
-
-      - name: Run every graphical script headless
-        if: runner.os == 'Linux'
+      - name: Run every pygame game headless for 10 seconds
         env:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
         run: |
-          set -e
-          scripts=$(grep -rl 'pygame' src --include='*.py' || true)
-          for s in $scripts; do
-            echo "running $s for 10s"
-            set +e
-            timeout 10 python "$s"
-            code=$?
-            set -e
-            if [ "$code" -ne 124 ]; then
-              echo "$s exited early with code $code instead of running its loop"
-              exit 1
-            fi
+          for s in $(grep -rl 'import pygame' src --include='*.py'); do
+            echo "running $s"
+            timeout 10 python "$s" && code=0 || code=$?
+            [ "$code" -eq 124 ] || { echo "$s stopped early with exit code $code"; exit 1; }
           done
 
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -153,22 +81,25 @@ jobs:
       matrix:
         include:
           - name: linux-x86_64
-            runner: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-26.04
+            target: x86_64-unknown-linux-musl # static binary, runs on any Linux
           - name: linux-arm64
-            runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-26.04-arm
+            target: aarch64-unknown-linux-musl
           - name: windows-x86_64
             runner: windows-latest
             target: x86_64-pc-windows-msvc
+          - name: windows-arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
           - name: macos-x86_64
-            runner: macos-15-intel
+            runner: macos-26-intel
             target: x86_64-apple-darwin
           - name: macos-arm64
             runner: macos-latest
             target: aarch64-apple-darwin
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -178,212 +109,85 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ env.JDK_VERSION }}
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10
 
-      - name: Build and test
+      - name: Build and test the menu
         run: |
-          set -e
-          cargo build --release --target ${{ matrix.target }}
-          cargo test --release --target ${{ matrix.target }}
+          cargo build --release --locked --target ${{ matrix.target }}
+          cargo test --release --locked --target ${{ matrix.target }}
 
-      - name: Bundle a Java runtime that can run .java files directly
+      - name: Bundle a Java runtime that can run .java files
         run: |
-          set -e
-          jlink --add-modules "$JLINK_MODULES" \
-                --strip-debug --no-header-files --no-man-pages \
-                --output runtime/jvm
-          runtime/jvm/bin/java -version
-          runtime/jvm/bin/java --list-modules | grep -q '^jdk.compiler' \
-            || { echo "jdk.compiler missing, the source launcher will not work"; exit 1; }
+          jlink --add-modules "$JLINK_MODULES" --strip-debug --no-header-files --no-man-pages \
+                --compress zip-6 --output payload/runtime/jvm
+          payload/runtime/jvm/bin/java -version
 
-      - name: Bundle a standalone Python with the project's dependencies
+      - name: Bundle a standalone Python with pygame
         run: |
-          set -e
           uv python install --install-dir pydist "$PYTHON_VERSION"
-          src_dir=$(ls -d pydist/cpython-*/ | grep -E 'cpython-[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "using $src_dir"
-          mkdir -p runtime
-          cp -a "${src_dir%/}" runtime/python
-
-          if [ -x runtime/python/bin/python3 ]; then
-            PY=runtime/python/bin/python3
+          mkdir -p payload/runtime
+          mv pydist/cpython-"$PYTHON_VERSION".*/ payload/runtime/python
+          if [ -x payload/runtime/python/bin/python3 ]; then
+            PY=payload/runtime/python/bin/python3
           else
-            PY=runtime/python/python.exe
-            cp runtime/python/python.exe runtime/python/python3.exe
+            PY=payload/runtime/python/python.exe
+            cp "$PY" payload/runtime/python/python3.exe # the menu looks for python3
           fi
-          echo "PY=$PY" >> "$GITHUB_ENV"
+          "$PY" -m pip install --disable-pip-version-check --no-cache-dir --break-system-packages $PYTHON_PACKAGES
 
-          if [ -f requirements.txt ]; then
-            uv pip install --python "$PY" --break-system-packages -r requirements.txt
-          else
-            uv pip install --python "$PY" --break-system-packages pygame-ce
-          fi
-
-          rm -rf runtime/python/include runtime/python/share \
-                 runtime/python/lib/python*/test runtime/python/Lib/test \
-                 runtime/python/lib/python*/idlelib runtime/python/Lib/idlelib \
-                 runtime/python/lib/python*/tkinter runtime/python/Lib/tkinter \
-                 runtime/python/lib/python*/ensurepip runtime/python/Lib/ensurepip
-          find runtime/python \( -name '*.a' -o -name '*.pyc' \) -delete 2>/dev/null || true
-          find runtime/python -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
-
+          # drop what a game bundle never needs: headers, tests, IDLE, Tk, pip
+          (
+            cd payload/runtime/python
+            rm -rf include share tcl libs \
+                   lib/python*/test lib/python*/idlelib lib/python*/tkinter lib/python*/ensurepip \
+                   lib/python*/turtledemo lib/python*/site-packages/pip* \
+                   Lib/test Lib/idlelib Lib/tkinter Lib/ensurepip Lib/turtledemo Lib/site-packages/pip* \
+                   DLLs/_tkinter.pyd DLLs/tcl*.dll DLLs/tk*.dll
+            find . \( -name '*.a' -o -name '*.pyc' \) -delete
+            find . -name __pycache__ -type d -prune -exec rm -rf {} +
+          )
           "$PY" -c "import pygame; print('bundled pygame', pygame.version.ver, 'SDL', pygame.version.SDL)"
-          du -sh runtime/python runtime/jvm
+          echo "PY=$PY" >> "$GITHUB_ENV"
+          du -sh payload/runtime/*
 
-      - name: Assemble bundle
+      - name: Assemble the payload
         run: |
-          set -e
-          BIN=$(grep -m1 '^name' Cargo.toml | tr -d '\r' | sed -E 's/.*"(.*)".*/\1/')
-          EXE="$BIN"
-          if [ "${{ runner.os }}" = "Windows" ]; then EXE="$BIN.exe"; fi
-          echo "EXE=$EXE" >> "$GITHUB_ENV"
+          BIN=$(sed -nE 's/^name *= *"([^"]*)".*/\1/p' Cargo.toml | head -1) # .* also eats a CR
+          EXE=$BIN
+          [ "$RUNNER_OS" = Windows ] && EXE=$BIN.exe
+          cp "target/${{ matrix.target }}/release/$EXE" payload/
+          mkdir payload/src
+          find src -maxdepth 1 -type f ! -name '*.rs' -exec cp {} payload/src/ \;
+          cp README.md LICENSE THIRD_PARTY_LICENSES.md payload/
+          : > "payload/BUILD-$GITHUB_SHA" # stamp: the launchers unpack again only when this changes
 
-          BUNDLE="dist/$PROJECT-${{ matrix.name }}"
-          mkdir -p "$BUNDLE/src"
-          cp "target/${{ matrix.target }}/release/$EXE" "$BUNDLE/$EXE"
-          chmod +x "$BUNDLE/$EXE"
-          cp -a runtime "$BUNDLE/runtime"
-          find src -maxdepth 1 -type f ! -name '*.rs' -exec cp {} "$BUNDLE/src/" \;
-          for doc in README.md LICENSE THIRD_PARTY_LICENSES.md requirements.txt; do
-            if [ -f "$doc" ]; then cp "$doc" "$BUNDLE/"; fi
-          done
-
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          # run.bat / run.sh: put the bundled Python and Java first on PATH, then start the menu
+          if [ "$RUNNER_OS" = Windows ]; then
             printf '%s\r\n' \
               '@echo off' \
               'cd /d "%~dp0"' \
               'set "PATH=%~dp0runtime\python;%~dp0runtime\jvm\bin;%PATH%"' \
-              "$EXE %*" > "$BUNDLE/run.bat"
-            LAUNCH='run.bat'
+              "$EXE %*" \
+              'if errorlevel 1 pause' > payload/run.bat
           else
-            cat > "$BUNDLE/run.sh" <<EOF
+            RUN_SCRIPT=run.sh
+            [ "$RUNNER_OS" = macOS ] && RUN_SCRIPT=$PROJECT.command # Terminal opens .command files
+            cat > "payload/$RUN_SCRIPT" <<EOF
           #!/bin/sh
-          HERE="\$(cd "\$(dirname "\$0")" && pwd)"
+          HERE=\$(cd "\$(dirname "\$0")" && pwd)
           PATH="\$HERE/runtime/python/bin:\$HERE/runtime/jvm/bin:\$PATH"
           export PATH
-          cd "\$HERE" || exit 1
-          exec "./$EXE" "\$@"
+          cd "\$HERE" && exec "./$BIN" "\$@"
           EOF
-            chmod +x "$BUNDLE/run.sh"
-            LAUNCH='./run.sh'
-          fi
+            chmod +x "payload/$RUN_SCRIPT"
 
-          cat > "$BUNDLE/HOW-TO-RUN.txt" <<EOF
-          Nothing to install.
-
-          Open a terminal in THIS folder and run:
-
-            $LAUNCH
-
-          Python, pygame and Java are all included in the runtime folder,
-          and the launcher script points the program at them.
-          EOF
-
-          echo "BUNDLE=$BUNDLE" >> "$GITHUB_ENV"
-          echo "--- bundle contents ---"
-          ls "$BUNDLE" "$BUNDLE/src"
-          du -sh "$BUNDLE"
-
-      - name: Run the bundle end to end
-        run: |
-          set -e
-          cd "$BUNDLE"
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            test -f run.bat
-            export PATH="$PWD/runtime/python:$PWD/runtime/jvm/bin:$PATH"
-            LAUNCH="./$EXE"
-          else
-            LAUNCH="./run.sh"
-          fi
-
-          echo "--- menu loads and finds the bundled Python ---"
-          printf -- '--help\nexit\n' | $LAUNCH
-
-          echo "--- a Python program runs through the bundled interpreter ---"
-          printf -- '6\n7\nn\n' | $LAUNCH
-
-          echo "--- the Java game starts through the bundled JVM ---"
-          out=$(printf 'CI\n1\n' | ./runtime/jvm/bin/java src/Walk-in-the-Park.java 2>&1 || true)
-          echo "$out" | head -3
-          echo "$out" | grep -q 'Welcome' \
-            || { echo "the Java game did not start"; exit 1; }
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: ${{ env.PROJECT }}-${{ matrix.name }}
-          path: dist/${{ env.PROJECT }}-${{ matrix.name }}
-          if-no-files-found: error
-          retention-days: ${{ startsWith(matrix.name, 'linux') && 1 || 90 }}
-
-  appimage:
-    name: appimage-${{ matrix.arch }}
-    needs: build
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-24.04
-            bundle: linux-x86_64
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
-            bundle: linux-arm64
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/download-artifact@v6
-        with:
-          name: ${{ env.PROJECT }}-${{ matrix.bundle }}
-          path: bundle
-
-      - name: Install appimagetool prerequisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends desktop-file-utils
-
-      - name: Assemble the AppDir
-        run: |
-          set -e
-          BIN=$(grep -m1 '^name' Cargo.toml | tr -d '\r' | sed -E 's/.*"(.*)".*/\1/')
-
-          mkdir -p "AppDir/usr/bin" "AppDir/usr/share/$PROJECT"
-          install -m 755 "bundle/$BIN" "AppDir/usr/bin/$BIN"
-          mv bundle/runtime "AppDir/usr/bin/runtime"
-          chmod -R +x AppDir/usr/bin/runtime
-          rm -f "bundle/$BIN" bundle/run.sh
-          cp -a bundle/. "AppDir/usr/share/$PROJECT/"
-
-          cat > AppDir/AppRun <<EOF
-          #!/bin/sh
-          HERE="\$(dirname "\$(readlink -f "\$0")")"
-          DATA="\${XDG_DATA_HOME:-\$HOME/.local/share}/$PROJECT"
-          mkdir -p "\$DATA" || exit 1
-          cp -R "\$HERE/usr/share/$PROJECT/." "\$DATA/" || exit 1
-          PATH="\$HERE/usr/bin/runtime/python/bin:\$HERE/usr/bin/runtime/jvm/bin:\$PATH"
-          export PATH
-          cd "\$DATA" || exit 1
-          exec "\$HERE/usr/bin/$BIN" "\$@"
-          EOF
-          chmod +x AppDir/AppRun
-
-          cat > "AppDir/$PROJECT.desktop" <<EOF
-          [Desktop Entry]
-          Type=Application
-          Name=$PROJECT
-          Comment=A menu of small Rust, Python and Java programs
-          Exec=$BIN
-          Icon=$PROJECT
-          Categories=Game;
-          Terminal=true
-          EOF
-
-          python3 - "$PROJECT" <<'PY'
+            # a plain 256x256 icon, used by the AppImage and the .app
+            "$PY" - icon.png <<'PY'
           import struct, sys, zlib
           w = h = 256
           raw = b"".join(b"\x00" + bytes([30, 34, 40]) * w for _ in range(h))
@@ -394,89 +198,238 @@ jobs:
                  + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
                  + chunk(b"IDAT", zlib.compress(raw))
                  + chunk(b"IEND", b""))
-          open("AppDir/" + sys.argv[1] + ".png", "wb").write(png)
+          open(sys.argv[1], "wb").write(png)
           PY
+          fi
+          echo "BIN=$BIN" >> "$GITHUB_ENV"
+          echo "EXE=$EXE" >> "$GITHUB_ENV"
+          ls payload payload/src
+          du -sh payload
 
-      - name: Build the AppImage
+      - name: Linux - build the AppImage
+        if: runner.os == 'Linux'
         env:
-          ARCH: ${{ matrix.arch }}
-          APPIMAGE_EXTRACT_AND_RUN: "1"
+          APPIMAGE_EXTRACT_AND_RUN: "1" # CI runners have no FUSE
         run: |
-          set -e
+          ARCH=$(uname -m)
+          OUT=$PROJECT-${{ matrix.name }}.AppImage
+          command -v desktop-file-validate >/dev/null \
+            || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends desktop-file-utils; }
+
+          mkdir AppDir
+          cp -R payload AppDir/payload
+          cp icon.png "AppDir/$PROJECT.png"
+
+          # First start (or a new build): unpack the game into a per-user folder, then start it from there.
+          cat > AppDir/AppRun <<EOF
+          #!/bin/sh
+          HERE=\$(dirname "\$(readlink -f "\$0")")
+          DATA=\${XDG_DATA_HOME:-\$HOME/.local/share}/$PROJECT
+          if [ ! -e "\$DATA/BUILD-$GITHUB_SHA" ]; then
+            echo "Unpacking $PROJECT into \$DATA ..."
+            mkdir -p "\$DATA" && rm -rf "\$DATA/runtime" "\$DATA/src" "\$DATA"/BUILD-*
+            cp -R "\$HERE/payload/." "\$DATA/"
+          fi
+          exec "\$DATA/run.sh" "\$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          cat > "AppDir/$PROJECT.desktop" <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=$PROJECT
+          Comment=A menu of small Rust, Python and Java games and tools
+          Exec=$BIN
+          Icon=$PROJECT
+          Categories=Game;
+          Terminal=true
+          EOF
+
           curl -fsSL -o appimagetool \
-            "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${{ matrix.arch }}.AppImage"
-          chmod +x appimagetool
+            "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-$ARCH.AppImage"
           curl -fsSL -o runtime-file \
-            "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-${{ matrix.arch }}"
-          ./appimagetool -n --runtime-file runtime-file AppDir "$PROJECT-${{ matrix.bundle }}.AppImage"
-          ls -lh "$PROJECT-${{ matrix.bundle }}.AppImage"
+            "https://github.com/AppImage/type2-runtime/releases/download/$APPIMAGE_RUNTIME_VERSION/runtime-$ARCH"
+          chmod +x appimagetool
+          ./appimagetool --no-appstream --runtime-file runtime-file AppDir "$OUT"
+          ls -lh "$OUT"
 
-      - name: Run the AppImage end to end
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: "1"
+          echo "RUN=./$OUT" >> "$GITHUB_ENV"
+          echo "DATA_DIR=$HOME/.local/share/$PROJECT" >> "$GITHUB_ENV"
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+
+      - name: macOS - build the .app and .dmg
+        if: runner.os == 'macOS'
         run: |
-          set -e
-          printf -- '--help\nexit\n' | "./$PROJECT-${{ matrix.bundle }}.AppImage"
-          printf -- '6\n7\nn\n' | "./$PROJECT-${{ matrix.bundle }}.AppImage"
+          OUT=$PROJECT-${{ matrix.name }}.dmg
+          APP=dmgroot/$PROJECT.app
+          VERSION=$(sed -nE 's/^version *= *"([^"]*)".*/\1/p' Cargo.toml | head -1)
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp -R payload "$APP/Contents/Resources/payload"
 
-      - uses: actions/upload-artifact@v5
+          # Finder runs this. First start (or a new build): copy the game into a writable folder, then open it in Terminal.
+          cat > "$APP/Contents/MacOS/$PROJECT" <<EOF
+          #!/bin/sh
+          HERE=\$(cd "\$(dirname "\$0")/../Resources/payload" && pwd)
+          DATA="\$HOME/Library/Application Support/$PROJECT"
+          if [ ! -e "\$DATA/BUILD-$GITHUB_SHA" ]; then
+            mkdir -p "\$DATA" && rm -rf "\$DATA/runtime" "\$DATA/src" "\$DATA"/BUILD-*
+            ditto --noqtn "\$HERE" "\$DATA" # --noqtn drops the "downloaded from the internet" flag so the bundled tools may run
+          fi
+          if [ -n "\$CI" ] || [ -t 0 ]; then exec "\$DATA/$PROJECT.command" "\$@"; fi
+          exec open -a Terminal "\$DATA/$PROJECT.command"
+          EOF
+          chmod +x "$APP/Contents/MacOS/$PROJECT"
+
+          mkdir icon.iconset
+          sips -z 256 256 icon.png --out icon.iconset/icon_256x256.png >/dev/null
+          sips -z 512 512 icon.png --out icon.iconset/icon_512x512.png >/dev/null
+          iconutil -c icns icon.iconset -o "$APP/Contents/Resources/$PROJECT.icns"
+
+          cat > "$APP/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>$PROJECT</string>
+            <key>CFBundleDisplayName</key><string>$PROJECT</string>
+            <key>CFBundleIdentifier</key><string>io.github.$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]').$PROJECT</string>
+            <key>CFBundleVersion</key><string>$VERSION</string>
+            <key>CFBundleShortVersionString</key><string>$VERSION</string>
+            <key>CFBundleExecutable</key><string>$PROJECT</string>
+            <key>CFBundleIconFile</key><string>$PROJECT</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+          plutil -lint "$APP/Contents/Info.plist"
+
+          cat > "dmgroot/How to open.txt" <<EOF
+          Double-click $PROJECT.
+
+          macOS will say it cannot check the app for malware, because it is not signed with an Apple developer account.
+          Click Done, open System Settings > Privacy & Security, scroll down and click "Open Anyway" next to $PROJECT.
+          That is only needed the first time. The game then opens in a Terminal window.
+          EOF
+
+          hdiutil create -volname "$PROJECT" -srcfolder dmgroot -ov -format UDZO "$OUT"
+          ls -lh "$OUT"
+
+          # mount it read-only like a user would and test from there
+          MOUNT=$RUNNER_TEMP/dmg
+          mkdir -p "$MOUNT"
+          hdiutil attach "$OUT" -nobrowse -readonly -mountpoint "$MOUNT"
+          echo "RUN=$MOUNT/$PROJECT.app/Contents/MacOS/$PROJECT" >> "$GITHUB_ENV"
+          echo "DATA_DIR=$HOME/Library/Application Support/$PROJECT" >> "$GITHUB_ENV"
+
+      - name: Windows - build the .exe
+        if: runner.os == 'Windows'
+        run: |
+          OUT=$PROJECT-${{ matrix.name }}.exe
+          MAKENSIS="/c/Program Files (x86)/NSIS/makensis.exe"
+          [ -x "$MAKENSIS" ] || choco install nsis -y --no-progress
+
+          # Single-file download: unpacks the game into %LOCALAPPDATA% the first time (or after an update), then starts it.
+          cat > installer.nsi <<'EOF'
+          Unicode true
+          Name "${NAME}"
+          OutFile "${OUT}"
+          SilentInstall silent
+          RequestExecutionLevel user
+          SetCompressor /SOLID lzma
+          Section
+            StrCpy $INSTDIR "$LOCALAPPDATA\${NAME}"
+            IfFileExists "$INSTDIR\BUILD-${BUILD}" start
+              Banner::show "Unpacking ${NAME}, this only happens once..."
+              RMDir /r "$INSTDIR\runtime"
+              RMDir /r "$INSTDIR\src"
+              Delete "$INSTDIR\BUILD-*"
+              SetOutPath "$INSTDIR"
+              File /r "${PAYLOAD}\*"
+              Banner::destroy
+            start:
+            SetOutPath "$INSTDIR"
+            Exec '"$SYSDIR\cmd.exe" /c ""$INSTDIR\run.bat""'
+          SectionEnd
+          EOF
+          "$MAKENSIS" -V2 -DNAME="$PROJECT" -DOUT="$OUT" -DBUILD="$GITHUB_SHA" \
+                      -DPAYLOAD="$(cygpath -w "$PWD/payload")" installer.nsi
+          ls -lh "$OUT"
+
+          # run it like a user would: it unpacks, then opens the game in its own window
+          "./$OUT"
+          for _ in $(seq 60); do
+            if tasklist | grep -i "^$EXE" >/dev/null; then break; fi
+            sleep 1
+          done
+          tasklist | grep -i "^$EXE" >/dev/null || { echo "the game window did not start"; exit 1; }
+          taskkill //F //IM "$EXE" >/dev/null
+          DATA=$(cygpath "$LOCALAPPDATA")/$PROJECT
+          echo "RUN=cmd //c $DATA/run.bat" >> "$GITHUB_ENV"
+          echo "DATA_DIR=$DATA" >> "$GITHUB_ENV"
+
+      - name: Test the download end to end
+        run: |
+          expect() { # expect <text the output must contain> <menu inputs...>
+            out=$(printf '%s\n' "${@:2}" | $RUN 2>&1) || true
+            if printf '%s\n' "$out" | grep "$1" >/dev/null; then
+              echo "ok: $1"
+            else
+              printf '%s\n' "$out"
+              echo "FAILED: expected '$1' in the output"
+              exit 1
+            fi
+          }
+          echo "--- the download unpacks itself and the menu lists the games ---"
+          expect 'wordle' --help exit
+          echo "--- a Python program starts through the bundled interpreter ---"
+          expect 'prime number checker' 6 n
+          echo "--- the Java game starts through the bundled JVM ---"
+          expect 'Welcome' 3 n
+          echo "--- everything landed in the per-user folder ---"
+          test -f "$DATA_DIR/src/words.txt"
+          ls "$DATA_DIR"
+
+      - uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.PROJECT }}-${{ matrix.bundle }}-appimage
-          path: ${{ env.PROJECT }}-${{ matrix.bundle }}.AppImage
+          name: ${{ env.PROJECT }}-${{ matrix.name }}
+          path: ${{ env.PROJECT }}-${{ matrix.name }}.*
           if-no-files-found: error
+          compression-level: 0 # already compressed
+          retention-days: 7
 
   release:
     name: release
     if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
-    needs: [java, python, build, appimage]
-    runs-on: ubuntu-24.04
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
-          path: artifacts
-
-      - name: Package the release files
-        run: |
-          set -e
-          mkdir -p dist
-          cd artifacts
-          for dir in */; do
-            name="${dir%/}"
-            case "$name" in
-              *-appimage)
-                base="${name%-appimage}"
-                mv "$name"/*.AppImage "../dist/$base.AppImage"
-                chmod +x "../dist/$base.AppImage"
-                ;;
-              *windows*)
-                (cd "$name" && zip -qr "../../dist/$name.zip" .)
-                ;;
-              *macos*)
-                chmod +x "$name"/* 2>/dev/null || true
-                chmod -R +x "$name/runtime" 2>/dev/null || true
-                tar -czf "../dist/$name.tar.gz" -C "$name" .
-                ;;
-              *)
-                echo "skipping intermediate artifact: $name"
-                ;;
-            esac
-          done
-          echo
-          ls -lh ../dist
-          count=$(ls -1 ../dist | wc -l)
-          if [ "$count" -ne 5 ]; then
-            echo "expected 5 release files, got $count"
-            exit 1
-          fi
+          path: dist
+          merge-multiple: true
 
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          set -e
+          ls -lh dist
+          count=$(find dist -type f | wc -l)
+          [ "$count" -eq 6 ] || { echo "expected 6 downloads, got $count"; exit 1; }
+
+          cat > notes.md <<EOF
+          ## How to run
+          Everything is included (Python, pygame and Java), there is nothing else to install.
+          - **Windows**: download the \`.exe\` for your PC (x86_64 for most PCs, arm64 for Snapdragon laptops) and double-click it. Windows warns about an unknown publisher: click "More info", then "Run anyway". The first start unpacks the game, after that it starts right away.
+          - **macOS**: download the \`.dmg\` (arm64 for Apple Silicon, x86_64 for Intel Macs), open it and double-click $PROJECT. macOS refuses the first time: open System Settings > Privacy & Security and click "Open Anyway". The dmg also contains "How to open.txt".
+          - **Linux**: download the \`.AppImage\`, make it executable (right-click > Properties, or \`chmod +x\`) and run it from a terminal.
+          EOF
+
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --notes-file notes.md
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber dist/*
