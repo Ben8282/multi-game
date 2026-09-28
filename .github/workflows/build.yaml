@@ -114,7 +114,7 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JDK_VERSION }}
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0 # setup-uv has no moving major tag, bump the exact version
 
       - name: Build and test the menu
         run: |
