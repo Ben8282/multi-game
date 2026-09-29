@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+.title{
+    text-align: center;
+    font-family: "Space Grotesk";
+    font-size: clamp(2rem, 6vw, 4rem);
+}
+.h2{
+    text-align: center;
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+}
+.h2-smaller{
+    text-align: center;
+    font-size: clamp(1rem, 3vw, 1.75rem);
+}
+.description{
+    text-align: center;
+}
+.code-veiw{
+    background: #3fb950;
+    color: white;
+    border: none;
+    padding: clamp(0.625rem, 0.6vw, 2rem);
+    border-radius: 0.625rem;
+    font-size: clamp(1rem, 0.85vw, 2rem);
+    font-weight: 600;
+    cursor: pointer;
+    display: block;
+    margin: 0 auto;
+}
+.border{
+    border: 1px solid #ddd;
+    border-radius: 0.7rem;
+    padding: clamp(0.25rem, 0.3vw, 1rem);   
+    margin: 1rem;
+}
