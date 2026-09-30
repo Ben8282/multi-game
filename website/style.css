@@ -31,11 +31,14 @@
 }
 .contanier{
     display: flex;
-    gap: 10vw;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 .border{
     border: 1px solid #ddd;
     border-radius: 0.7rem;
     padding: clamp(0.25rem, 0.3vw, 1rem);   
     margin: 1rem;
+    flex: 1 1 250px;
 }
