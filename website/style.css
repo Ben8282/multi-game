@@ -14,6 +14,8 @@
 }
 .description{
     text-align: center;
+    font-size: clamp(1rem, 3vw, 1.75rem);
+    color: #808080;
 }
 .code-veiw{
     background: #3fb950;
@@ -26,6 +28,10 @@
     cursor: pointer;
     display: block;
     margin: 0 auto;
+}
+.contanier{
+    display: flex;
+    gap: 10vw;
 }
 .border{
     border: 1px solid #ddd;
