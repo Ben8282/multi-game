@@ -1,5 +1,7 @@
 # multi-game
 it is a project that combines multiple projects together
+we also have a website 
+<a href=“https://ben8282.github.io/multi-game/”>click to view our website</a>
 ## run options
 ### from source
 simply run `cargo run --release`
