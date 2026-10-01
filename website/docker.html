@@ -1,19 +1,39 @@
 <!DOCTYPE html>
 <html>
-    <style rel="stylesheet" href="style.css"></style>
+    <head>
+        <title>Docker guide</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
     <body>
         <section class="docker_markdown_contanier">
-        <div id="readme">
-# Docker Guide
-- to use docker first build the image with
-- `docker build -t multi-game .`
-- then run it with
-- `docker run -it multi-game`
-- It is worth noting that Pong won't work properly inside Docker, even though all the other applications will.
-
+        <div id="Docker">
+            <div class="docker-header">
+                <h1>Docker Guide</h1>
+                <button id="go-back-button" class="code-veiw">Go back to Home page</button>
+            </div>
+            <br>
+            <p>To use Docker first make sure you have docker installed 
+                and git is optional but recommend</p>
+            <h3>Git method (recommend)</h3>
+            <p>first clone the repo with</p>
+            <code>git clone https://github.com/Ben8282/multi-game.git</code>
+            <p>Then cd into the folder with</p>
+            <code>cd multi-game</code>
+            <h3>Non git method</h3>
+            <p>First step Go to</p>
+            <a href="https://github.com/Ben8282/multi-game/tree/main">https://github.com/Ben8282/multi-game/tree/main</a>
+            <p>then click the button labeled code and click download zip then take that zip file and 
+                extract it then open the extracted folder and you should see all the code and folders if you just see another folder
+                open that and then you should see all the code and everything then open that folder in you terminal
+            </p>
+            <h4>now were on the step where both the git method and non git method should follow</h4>
+            <p>first you need to build the image with</p>
+            <code>docker build -t multi-game .</code>
+            <p>then you need to run the image with</p>
+            <code>docker run -it multi-game</code>
+            <p>It is worth noting that Pong won't work properly inside Docker, even though all the other applications will.</p>
         </div>
     </section>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib/marked.umd.min.js"></script>
         <script src="script.js"></script>
     </body>
 </html>

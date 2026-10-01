@@ -36,13 +36,31 @@
     justify-content: center;
 }
 .docker_markdown_contanier{
-    width: 100vw;
-    height: 100vw;
     display: flex;
     justify-content: center;
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 2rem 16px;
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    line-height: 1.6;
+}
+#Docker{
+    width: 100%;
+    max-width: 800px;
+}
+#Docker code{
+    display: block;
+    background: #f4f4f4;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    margin: 0.5rem 0;
+    overflow-x: auto;
+
+}
+.docker-header{
+    display: flex;
     align-items: center;
-    text-align: center;
-    font-size: 10vw;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 .border{
     border: 1px solid #ddd;
@@ -50,4 +68,9 @@
     padding: clamp(0.25rem, 0.3vw, 1rem);   
     margin: 1rem;
     flex: 1 1 250px;
+}
+.footer{
+    text-align: center;
+    padding: 1rem;
+    background-color: #f1f1f1;
 }

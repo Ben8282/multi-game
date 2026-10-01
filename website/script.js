@@ -14,7 +14,7 @@ releases_button.onclick = function(){
 };
 }
 
-const sourceButton = document.getElementById("Source-button");
+const sourceButton = document.getElementById("source-button");
 
 if (sourceButton){
 sourceButton.onclick = function(){
@@ -22,6 +22,12 @@ sourceButton.onclick = function(){
 };
 }
 
-const readme = document.getElementById("readme");
+const go_back_button = document.getElementById("go-back-button");
 
-readme.innerHTML = marked.parse(readme.textContent);
+if (go_back_button){
+go_back_button.onclick = function(){
+    window.location.href = "index.html";
+};
+}
+
+document.getElementById("year").textContent = new Date().getFullYear();
