@@ -1,9 +1,19 @@
 <!DOCTYPE html>
 <html>
+    <style rel="stylesheet" href="style.css"></style>
     <body>
+        <section class="docker_markdown_contanier">
         <div id="readme">
-            
+# Docker Guide
+- to use docker first build the image with
+- `docker build -t multi-game .`
+- then run it with
+- `docker run -it multi-game`
+- It is worth noting that Pong won't work properly inside Docker, even though all the other applications will.
+
         </div>
+    </section>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib/marked.umd.min.js"></script>
+        <script src="script.js"></script>
     </body>
 </html>

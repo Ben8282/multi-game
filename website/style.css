@@ -35,6 +35,15 @@
     flex-wrap: wrap;
     justify-content: center;
 }
+.docker_markdown_contanier{
+    width: 100vw;
+    height: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-size: 10vw;
+}
 .border{
     border: 1px solid #ddd;
     border-radius: 0.7rem;
