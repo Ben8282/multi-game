@@ -24,3 +24,12 @@ go to the latest release and download it for your specific os we support the fol
 - then run it with
 - `docker run -it multi-game`
 - It is worth noting that Pong won't work properly inside Docker, even though all the other applications will.
+### shell install (coming soon) *(only for the real ones on linux, bsd or the lucky ones on macos)*
+```sh
+curl -fsSL https://raw.githubusercontent.com/Ben8282/multi-game/main/install.sh | sh
+```
+- once it is done installing you can just run in your terminal to run it 
+```sh
+multi-game
+```
+- ***this is only coming soon and is not implented yet***
