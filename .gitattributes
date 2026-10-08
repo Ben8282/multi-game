@@ -1,4 +1,4 @@
 docs/** linguist-detectable=true
 docs/** -linguist-documentation
-*.js linguist-detectable=true
-*dockerfile linguist-detectable=true
+* linguist-detectable=true
+
