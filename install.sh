@@ -10,6 +10,9 @@ download(){
 has(){
     command -v "$1" >/dev/null 2>&1
 }
+log(){
+    echo "$1"
+}
 
 main(){
     echo "installing multi-game into $INSTALL_DIR"
@@ -69,10 +72,30 @@ main(){
         log "then run this installer again"
         exit 1
     fi
-    
-    if has git; then
-        echo "git is installed, cloning repo"
+
+    if has sudo; then
+        SUDO="sudo"
+    elif has doas; then
+        SUDO="doas"
+    elif [ "$(id -u)" -eq 0 ]; then
+        SUDO=""
     else
-        echo "git is not installed"
+        log "could not find a supported privilege escalation tool"
+        log "please install these yourself: git, python3, pygame, java, rust"
+        log "then run this installer again"
+        exit 1
+    fi
+
+    if has git; then
+        log "git is installed"
+        if command git -C "$INSTALL_DIR" pull 2>/dev/null; then
+            log "multi-game already exists, pulling latest changes"
+        else
+            log "multi-game does not exist, cloning"
+            command git clone https://github.com/multi-game/multi-game.git "$INSTALL_DIR"
+        fi
+    else
+        log "git is not installed"
     fi
 }
+main
