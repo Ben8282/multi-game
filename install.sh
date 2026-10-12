@@ -73,6 +73,29 @@ main(){
         exit 1
     fi
 
+    missing=""
+    
+    has git || missing="$missing git"
+    if ! has java || ! has javac; then
+        missing="$missing java"
+    fi
+    has cargo || missing="$missing cargo"
+
+    if has python3; then
+        PY="python3"
+    elif has python; then
+        PY="python"
+    else
+        PY=""
+        missing="$missing python"
+    fi
+
+    if [ -z "$PY" ] || ! "$PY" -c "import pygame" >/dev/null 2>&1; then
+        missing="$missing pygame"
+    fi
+
+    log "missing:$missing"
+
     if has sudo; then
         SUDO="sudo"
     elif has doas; then
@@ -86,16 +109,20 @@ main(){
         exit 1
     fi
 
-    if has git; then
-        log "git is installed"
-        if command git -C "$INSTALL_DIR" pull 2>/dev/null; then
-            log "multi-game already exists, pulling latest changes"
-        else
-            log "multi-game does not exist, cloning"
-            command git clone https://github.com/multi-game/multi-game.git "$INSTALL_DIR"
-        fi
+    if ! has git; then
+        log "git is not installed, please install it and rerun" >&2
+        exit 1
+    fi
+
+    if [ -e "$INSTALL_DIR/.git" ]; then
+        log "updating multi-game"
+        git -C "$INSTALL_DIR" pull --ff-only
+    elif [ -e "$INSTALL_DIR" ]; then
+        log "$INSTALL_DIR exists but isn't a multi-game checkout, remove it and rerun" >&2
+        exit 1
     else
-        log "git is not installed"
+        log "cloning multi-game"
+        git clone https://github.com/Ben8282/multi-game.git "$INSTALL_DIR"
     fi
 }
 main
