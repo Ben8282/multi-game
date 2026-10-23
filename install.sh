@@ -26,6 +26,11 @@ main(){
             ;;
         Darwin)
             echo "MacOS detected"
+            PATH="/opt/homebrew/bin:$PATH"
+            if ! has brew; then
+                log "brew is not installed, installing it"
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/tty
+            fi
             ;;
         FreeBSD|DragonFly)
             echo "you are on $os"
@@ -63,6 +68,8 @@ main(){
         PM="pkg_add"
     elif has pkgin; then
         PM="pkgin"
+    elif has brew; then
+        PM="brew"
     elif has nix-shell; then
         PM="nix"
     elif has guix; then
@@ -75,7 +82,8 @@ main(){
     missing=""
     
     has git || missing="$missing git"
-    if ! has java || ! has javac; then
+    # run java and javac instead of just checking that they exist because macOS has fake ones that exist even when java isn't installed
+    if ! java -version >/dev/null 2>&1 || ! javac -version >/dev/null 2>&1; then
         missing="$missing java"
     fi
     has cargo || missing="$missing cargo"
@@ -151,6 +159,20 @@ main(){
             $SUDO apt-get update
             $SUDO apt-get install -y python3-pygame
         fi
+
+    elif [ "$PM" = "brew" ]; then
+        if ! java -version >/dev/null 2>&1 || ! javac -version >/dev/null 2>&1; then
+            log "java is not installed, installing it"
+            brew install --cask temurin
+        fi
+        if ! has cargo; then
+            log "cargo is not installed, installing it"
+            brew install rust
+        fi
+        if [ ! -x "$(brew --prefix)/bin/python3" ]; then
+            log "brew's python is not installed, installing it"
+            brew install python
+        fi
     
     else
         log "please install these yourself: git, python3, pygame, java, rust"
@@ -175,6 +197,13 @@ main(){
         git clone https://github.com/Ben8282/multi-game.git "$INSTALL_DIR"
     fi
 
+    # install pygame-ce for macos systems
+    if [ "$PM" = "brew" ] && ! "$PY" -c "import pygame" >/dev/null 2>&1; then
+        log "pygame is not installed, installing it"
+        "$(brew --prefix)/bin/python3" -m venv "$INSTALL_DIR/.venv"
+        "$INSTALL_DIR/.venv/bin/python3" -m pip install pygame-ce
+    fi
+
     # compile the Coooool code
     log "building multi-game, the first build can take a few minutes"
     cargo build --release --locked --manifest-path "$INSTALL_DIR/Cargo.toml"
@@ -184,8 +213,15 @@ main(){
     cat > "$HOME/.local/bin/multi-game" <<EOF
 #!/bin/sh
 cd "$INSTALL_DIR" || exit 1
+PATH="$INSTALL_DIR/.venv/bin:\$PATH"
 ./target/release/multi-game
 EOF
     chmod +x "$HOME/.local/bin/multi-game"
+        if [ "$os" = "Darwin" ]; then
+            log "adding a multi-game shortcut to /usr/local/bin, this needs your password"
+            sudo mkdir -p /usr/local/bin
+            sudo ln -sf "$HOME/.local/bin/multi-game" /usr/local/bin/multi-game
+        fi
+    log "done! type multi-game to play"
 }
 main
