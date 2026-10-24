@@ -22,6 +22,14 @@ sourceButton.onclick = function(){
 };
 }
 
+const CurlButton = document.getElementById("Curl_Button");
+
+if (CurlButton){
+CurlButton.onclick = function(){
+    window.location.href = "curl.html";
+};
+}
+
 const go_back_button = document.getElementById("go-back-button");
 
 if (go_back_button){
