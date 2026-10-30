@@ -1,7 +1,7 @@
 /**
  * 
  */
-package My_Personal_Programs;
+
 
 import java.util.Random;
 import java.util.Scanner;
