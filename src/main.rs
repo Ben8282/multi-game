@@ -41,6 +41,7 @@ fn main() {
             println!(" 10. rock-paper-scissors is a simple rock paper scissors game");
             println!(" 11. wordle is a simple wordle game but not all words are in english so you might have to guess some words");
             println!(" 12. fake_gambling is a fake gambling game");
+            println!(" 13. guess-capital is a game where you try to guess the capital of a country");
             continue;
         } else if input.to_lowercase() == "p-manager" || input == "4" {
             Command::new(python)
@@ -93,8 +94,12 @@ fn main() {
                 .arg("src/fake_gambling.py")
                 .status()
                 .expect("there was a problem running the fake_gambling game");
-        }
-        else{
+        } else if input.to_lowercase() == "guess-capital" || input == "13"{
+            Command::new("java")
+                .arg("src/GuessTheCapital.java")
+                .status()
+                .expect("there was a problem running the Guess the capital game");
+        } else{
             println!("invalid command");
             println!("use --help for all commands");
             continue;
