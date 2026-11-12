@@ -81,7 +81,8 @@ main(){
 
     missing=""
     
-    has git || missing="$missing git"
+    # run git instead of just checking that it exists cus macOS has a fake one that exists even when git isn't installed
+    git --version >/dev/null 2>&1 || missing="$missing git"
     # run java and javac instead of just checking that they exist because macOS has fake ones that exist even when java isn't installed
     if ! java -version >/dev/null 2>&1 || ! javac -version >/dev/null 2>&1; then
         missing="$missing java"
@@ -120,6 +121,10 @@ main(){
         log "everything is already installed"
     elif [ "$PM" = "pacman" ]; then
         command -v $SUDO >/dev/null 2>&1 || { log "sudo is not installed, please install it and rerun" >&2; exit 1; }
+        if ! has git; then
+            log "git is not installed, installing it"
+            $SUDO pacman -S --needed --noconfirm git
+        fi
         if ! has python3; then
             log "python3 is not installed, installing it"
             $SUDO pacman -S --needed --noconfirm python
@@ -139,6 +144,11 @@ main(){
 
     elif [ "$PM" = "apt-get" ]; then
         command -v $SUDO >/dev/null 2>&1 || { log "sudo is not installed, please install it and rerun" >&2; exit 1; }
+        if ! has git; then
+            log "git is not installed, installing it"
+            $SUDO apt-get update
+            $SUDO apt-get install -y git
+        fi
         if ! has python3; then
             log "python3 is not installed, installing it"
             $SUDO apt-get update
@@ -161,6 +171,11 @@ main(){
         fi
 
     elif [ "$PM" = "brew" ]; then
+        # run git instead of just checking it exists cus macOS has a fake one like java
+        if ! git --version >/dev/null 2>&1; then
+            log "git is not installed, installing it"
+            brew install git
+        fi
         if ! java -version >/dev/null 2>&1 || ! javac -version >/dev/null 2>&1; then
             log "java is not installed, installing it"
             brew install --cask temurin
@@ -180,8 +195,8 @@ main(){
         exit 1
     fi
 
-    # check that gits installed cus we need to 
-    if ! has git; then
+    # check that gits installed cus we need to
+    if ! git --version >/dev/null 2>&1; then
         log "git is not installed, please install it and rerun" >&2
         exit 1
     fi
