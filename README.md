@@ -34,4 +34,4 @@ curl -fsSL https://raw.githubusercontent.com/Ben8282/multi-game/main/install.sh 
 ```
 - once it is done installing you can just run in your terminal to run it 
 - `multi-game`
-- ***this has not been fully implented yet we currently only have it working for macos and for linux we have debain and arch based systems support for now***
+- ***this has not been fully implented yet we currently only have it working for a few operating systems to see the full details on whats supported check our curl guide page on our website <a href="https://multi-game.b82.dev/curl.html">here to veiw full details</a>***

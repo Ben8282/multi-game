@@ -15,6 +15,24 @@ log(){
     echo "$1"
 }
 
+# asks gentoo users if they want prebuilt binary packages or to compile from source
+# keeps asking until they type 1 or 0, then saves it in USE_BIN (1 = binary, 0 = source)
+ask_bin(){
+    while true; do
+        printf "do you want binary packages (1) or to compile from source (0)? "
+        read -r answer </dev/tty
+        case "$answer" in
+            1|0)
+                USE_BIN="$answer"
+                return
+                ;;
+            *)
+                log "please type 1 or 0"
+                ;;
+        esac
+    done
+}
+
 main(){
     echo "installing multi-game into $INSTALL_DIR"
 
@@ -159,10 +177,11 @@ main(){
             $SUDO apt-get update
             $SUDO apt-get install -y default-jdk
         fi
+        # use rustup instead of apt cus debian and ubuntu ship a rust thats too old for edition 2024 (needs 1.85+)
         if ! has cargo; then
-            log "cargo is not installed, installing it"
-            $SUDO apt-get update
-            $SUDO apt-get install -y cargo
+            log "cargo is not installed, installing it with rustup"
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            . "$HOME/.cargo/env"
         fi
         if ! "$PY" -c "import pygame" >/dev/null 2>&1; then
             log "pygame is not installed, installing it"
@@ -189,6 +208,42 @@ main(){
             brew install python
         fi
     
+    elif [ "$PM" = "emerge" ]; then
+        command -v $SUDO >/dev/null 2>&1 || { log "sudo is not installed, please install it and rerun" >&2; exit 1; }
+        # only java and rust have binary versions so only ask if one of them is missing
+        if ! has java || ! has javac || ! has cargo; then
+            ask_bin
+        fi
+        # --ask=n so emerge just installs without asking and we dont just do nothing in case --ask is turned on in make.conf
+        if ! has git; then
+            log "git is not installed, installing it"
+            $SUDO emerge --noreplace --ask=n dev-vcs/git
+        fi
+        if ! has python3; then
+            log "python3 is not installed, installing it"
+            $SUDO emerge --noreplace --ask=n dev-lang/python
+        fi
+        if ! has java || ! has javac; then
+            log "java is not installed, installing it"
+            if [ "$USE_BIN" = 1 ]; then
+                $SUDO emerge --noreplace --ask=n dev-java/openjdk-bin
+            else
+                $SUDO emerge --noreplace --ask=n dev-java/openjdk
+            fi
+        fi
+        if ! has cargo; then
+            log "cargo is not installed, installing it"
+            if [ "$USE_BIN" = 1 ]; then
+                $SUDO emerge --noreplace --ask=n dev-lang/rust-bin
+            else
+                $SUDO emerge --noreplace --ask=n dev-lang/rust
+            fi
+        fi
+        if ! "$PY" -c "import pygame" >/dev/null 2>&1; then
+            log "pygame is not installed, installing it"
+            $SUDO emerge --noreplace --ask=n dev-python/pygame
+        fi
+
     else
         log "please install these yourself: git, python3, pygame, java, rust"
         log "then run this installer again"
