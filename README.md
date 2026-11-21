@@ -28,10 +28,10 @@ go to the latest release and download it for your specific os we support the fol
   docker run -it multi-game
   ```
 - It is worth noting that Pong won't work properly inside Docker, even though all the other applications will.
-### shell install (experinmental) *(only for the real ones on linux, bsd or the lucky ones on macos)*
+### shell install note rerun curl command to update (experinmental) *(only for the real ones on linux, bsd or the lucky ones on macos)*
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Ben8282/multi-game/main/install.sh | sh
 ```
-- once it is done installing you can just run in your terminal to run it 
+- once it is done installing you can just run in your terminal to run it
 - `multi-game`
 - ***this has not been fully implented yet we currently only have it working for a few operating systems to see the full details on whats supported check our curl guide page on our website <a href="https://multi-game.b82.dev/curl.html">here to veiw full details</a>***
