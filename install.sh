@@ -297,6 +297,24 @@ EOF
             log "adding a multi-game shortcut to /usr/local/bin, this needs your password"
             sudo mkdir -p /usr/local/bin
             sudo ln -sf "$HOME/.local/bin/multi-game" /usr/local/bin/multi-game
+        else
+            case ":$PATH:" in
+                *":$HOME/.local/bin:"*) ;;
+                *)
+                    case "$(basename "${SHELL:-sh}")" in
+                        bash) RC="$HOME/.bashrc"; LINE='export PATH="$HOME/.local/bin:$PATH"' ;;
+                        zsh) RC="$HOME/.zshrc"; LINE='export PATH="$HOME/.local/bin:$PATH"' ;;
+                        fish) RC="$HOME/.config/fish/config.fish"; LINE='fish_add_path $HOME/.local/bin' ;;
+                        *) RC="$HOME/.profile"; LINE='export PATH="$HOME/.local/bin:$PATH"' ;;
+                    esac
+                    if ! grep -qsxF "$LINE" "$RC"; then
+                        mkdir -p "$(dirname "$RC")"
+                        printf '\n%s\n' "$LINE" >> "$RC"
+                        log "added $HOME/.local/bin to your PATH in $RC"
+                    fi
+                    log "open a new terminal so the multi-game command works"
+                    ;;
+            esac
         fi
     log "done! type multi-game to play"
 }
