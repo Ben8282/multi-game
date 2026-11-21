@@ -34,6 +34,7 @@ ask_bin(){
 }
 
 main(){
+    trap 'status=$?; [ "$status" -eq 0 ] || log "install failed (exit code $status), see the error above"' EXIT
     echo "installing multi-game into $INSTALL_DIR"
 
     os=$(uname -s)
@@ -116,7 +117,8 @@ main(){
         missing="$missing python"
     fi
 
-    if [ -z "$PY" ] || ! "$PY" -c "import pygame" >/dev/null 2>&1; then
+    if { [ -z "$PY" ] || ! "$PY" -c "import pygame" >/dev/null 2>&1; } &&
+        ! "$INSTALL_DIR/.venv/bin/python3" -c "import pygame" >/dev/null 2>&1; then
         missing="$missing pygame"
     fi
 
@@ -222,6 +224,7 @@ main(){
         if ! has python3; then
             log "python3 is not installed, installing it"
             $SUDO emerge --noreplace --ask=n dev-lang/python
+            PY="python3"
         fi
         if ! has java || ! has javac; then
             log "java is not installed, installing it"
@@ -238,10 +241,6 @@ main(){
             else
                 $SUDO emerge --noreplace --ask=n dev-lang/rust
             fi
-        fi
-        if ! "$PY" -c "import pygame" >/dev/null 2>&1; then
-            log "pygame is not installed, installing it"
-            $SUDO emerge --noreplace --ask=n dev-python/pygame
         fi
 
     else
@@ -267,11 +266,18 @@ main(){
         git clone https://github.com/Ben8282/multi-game.git "$INSTALL_DIR"
     fi
 
-    # install pygame-ce for macos systems
-    if [ "$PM" = "brew" ] && ! "$PY" -c "import pygame" >/dev/null 2>&1; then
-        log "pygame is not installed, installing it"
-        "$(brew --prefix)/bin/python3" -m venv "$INSTALL_DIR/.venv"
-        "$INSTALL_DIR/.venv/bin/python3" -m pip install pygame-ce
+    if [ "$PM" = "brew" ] || [ "$PM" = "emerge" ]; then
+        if [ "$PM" = "brew" ]; then
+            VENV_PY="$(brew --prefix)/bin/python3"
+        else
+            VENV_PY="$PY"
+        fi
+        if ! "$VENV_PY" -c "import pygame" >/dev/null 2>&1 &&
+            ! "$INSTALL_DIR/.venv/bin/python3" -c "import pygame" >/dev/null 2>&1; then
+            log "pygame is not installed, installing pygame-ce"
+            "$VENV_PY" -m venv "$INSTALL_DIR/.venv"
+            "$INSTALL_DIR/.venv/bin/python3" -m pip install pygame-ce
+        fi
     fi
 
     # compile the Coooool code
