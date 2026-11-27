@@ -474,8 +474,8 @@ Enter a number (1-8):
 Choose the unit you want to convert FROM:
 "
             );
-            for (index, Unit) in weight_units.iter().enumerate() {
-                println!("{}. {}", index + 1, Unit.name);
+            for (index, unit) in weight_units.iter().enumerate() {
+                println!("{}. {}", index + 1, unit.name);
             }
 
             let amount_of_weight_units = weight_units.len();
